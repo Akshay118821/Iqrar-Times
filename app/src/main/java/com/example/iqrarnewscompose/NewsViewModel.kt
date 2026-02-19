@@ -36,7 +36,6 @@ class NewsViewModel : ViewModel() {
     fun loadNews(category: String) {
         viewModelScope.launch {
 
-
             if (newsCache.containsKey(category)) {
                 newsList.clear()
                 newsList.addAll(newsCache[category]!!)
@@ -45,21 +44,16 @@ class NewsViewModel : ViewModel() {
 
             try {
                 isLoading.value = true
+                newsList.clear()
 
-                val data = repo.getAllNews()
-
-                val filtered = if (category == "Home" || category == "HOME") {
-                    data
+                val data = if (category == "Home" || category == "HOME") {
+                    repo.getAllNews()
                 } else {
-                    data.filter {
-                        it.categories?.contains(category) == true
-                    }
+                    repo.getNewsByCategory(category)
                 }
 
-                newsCache[category] = filtered
-
-                newsList.clear()
-                newsList.addAll(filtered)
+                newsCache[category] = data
+                newsList.addAll(data)
 
             } catch (e: Exception) {
                 e.printStackTrace()

@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -163,16 +164,15 @@ fun MainApp() {
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            //This is section the modification is done
                         } else {
                             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Public, null, tint = Color.White, modifier = Modifier.size(28.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("IQRAR", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, lineHeight = 18.sp)
-                                        Text("TIMES", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    }
-                                }
+                                Image(
+                                    painter = painterResource(id = R.drawable.logo),
+                                    contentDescription = "Logo",
+                                    modifier = Modifier.height(38.dp).width(180.dp),
+                                    contentScale = ContentScale.Fit
+                                )
                             }
                         }
                     },

@@ -4,10 +4,22 @@ class NewsRepository {
 
     private val api = RetrofitInstance.api
 
-    // 🔥 GET ALL NEWS
+
     suspend fun getAllNews(): List<ApiNewsArticle> {
         return try {
             val response = api.getAllNews()
+            if (response.isSuccessful) {
+                response.body()?.data ?: emptyList()
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+    suspend  fun getNewsByCategory(categoryId: String): List<ApiNewsArticle> {
+        return try {
+            val response = api.getNewsByCategory(categoryId)
             if (response.isSuccessful) {
                 response.body()?.data ?: emptyList()
             } else {
@@ -31,7 +43,7 @@ class NewsRepository {
         }
     }
 
-    // 🔥 FETCH CATEGORIES
+
     suspend fun fetchCategories(lang: String) =
         api.getCategories(lang)
 }

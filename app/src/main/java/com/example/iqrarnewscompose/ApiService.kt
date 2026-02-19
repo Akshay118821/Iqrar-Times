@@ -11,6 +11,11 @@ interface ApiService {
     suspend fun getAllNews(): Response<NewsResponse>
 
 
+    @GET("news/news")
+    suspend fun getNewsByCategory(
+        @Query("category") categoryId: String
+    ): Response<NewsResponse>
+
     @POST("backoffice/news")
     suspend fun createNews(
         @Body newsData: Map<String, Any>
