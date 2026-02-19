@@ -1,5 +1,6 @@
 package com.example.iqrarnewscompose
 
+import VideosScreen
 import android.R.id.shareText
 import com.example.iqrarnewscompose.CategoryItem
 import com.example.iqrarnewscompose.CategoryResponse
@@ -519,19 +520,19 @@ fun EPaperScreen(url: String) {
 
 @Composable
 fun HomeScreen(
+
     lang: String,
     onNavigate: (String) -> Unit,
     onNewsClick: (NewsArticle) -> Unit,
     categories: List<CategoryItem>,
     viewModel: NewsViewModel
-) {
-    var showLoader by remember { mutableStateOf(true) }
+){var showLoader by remember { mutableStateOf(viewModel.newsList.isEmpty()) }
 
-    LaunchedEffect(Unit) {
-        viewModel.loadNews("Home")
-        delay(1000) // exactly 1 second
+LaunchedEffect(Unit) {
+    viewModel.loadNews("Home") {
         showLoader = false
     }
+}
 
 
     val newsList = viewModel.newsList
@@ -657,21 +658,15 @@ fun CategoryNewsScreen(
     onNewsClick: (NewsArticle) -> Unit,
     categories: List<CategoryItem>,
     viewModel: NewsViewModel
-) {
+){
     var showLoader by remember { mutableStateOf(true) }
-
     LaunchedEffect(catId) {
-        showLoader = true
-        viewModel.loadNews(catId)
+    showLoader = true
+    viewModel.loadNews(catId) {
+        showLoader = false
     }
+}
 
-
-    LaunchedEffect(viewModel.newsList) {
-        if (viewModel.newsList.isNotEmpty()) {
-            delay(500)
-            showLoader = false
-        }
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -818,42 +813,7 @@ fun DynamicCategorySection(
     }
 }
 
-@Composable
-fun VideosScreen(lang: String, viewModel: NewsViewModel) {
 
-    LaunchedEffect(Unit) {
-        viewModel.loadNews("Home")
-    }
-
-    val videoList = viewModel.newsList.filter { news ->
-        (news.video != null && news.video.isNotEmpty() && news.video[0].isNotEmpty()) ||
-                (news.youtube_url != null && news.youtube_url.isNotEmpty())
-    }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-    ) {
-
-        item {
-            Text(
-                text = if (lang == "Hindi") "वीडियो" else "Videos",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(16.dp),
-                color = TextBlack
-            )
-        }
-
-        items(videoList) { news ->
-            VideoNewsCardDynamic(
-                img = news.icon ?: "",
-                title = news.name ?: ""
-            )
-        }
-    }
-}
 @Composable
 fun VideoNewsCardDynamic(img: String, title: String) {
     Column(

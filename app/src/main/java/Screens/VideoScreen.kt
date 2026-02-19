@@ -1,4 +1,4 @@
-package com.example.iqrarnewscompose.Screens
+
 
 import android.webkit.WebView
 import androidx.compose.foundation.Image
@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -25,7 +26,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.iqrarnewscompose.TextBlack
 import com.example.iqrarnewscompose.TextGray
 import com.example.iqrarnewscompose.NewsViewModel
-import kotlinx.coroutines.delay
+
 
 data class VideoArticle(
     val title: String,
@@ -44,21 +45,18 @@ fun VideosScreen(
     var selectedVideoUrl by remember { mutableStateOf<String?>(null) }
     var showLoader by remember { mutableStateOf(true) }
 
+    val videoNews = remember { mutableStateListOf<com.example.iqrarnewscompose.api.ApiNewsArticle>() }
+
     LaunchedEffect(Unit) {
-        viewModel.loadNews("84a69d51-4e22-4d76-b700-0d51aee23e37")
-
-    }
-
-    LaunchedEffect(viewModel.newsList) {
-        if (viewModel.newsList.isNotEmpty()) {
-            delay(1000)
+        showLoader = true
+        viewModel.loadNewsSeparate("Home") { data: List<com.example.iqrarnewscompose.api.ApiNewsArticle> ->
+            videoNews.clear()
+            videoNews.addAll(data)
             showLoader = false
         }
     }
 
-    val videoNews = viewModel.newsList.filter {
-        !it.icon.isNullOrEmpty()
-    }
+
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -94,16 +92,20 @@ fun VideosScreen(
                     )
                 }
             }
-
+//This section of videos has been done
             items(videoNews) { item ->
+
+                val context = LocalContext.current
 
                 val videoArticle = VideoArticle(
                     title = item.name ?: "",
                     description = item.content ?: "",
                     thumbUrl = item.icon ?: "",
-                    videoUrl = item.video?.firstOrNull()
-                        ?: item.youtube_url?.firstOrNull()
-                        ?: "",
+                    videoUrl = if (!item.youtube_url.isNullOrEmpty() && item.youtube_url.first().isNotEmpty()) {
+                        "videoUrl = https://www.youtube.com/watch?v=dQw4w9WgXcQ,"
+                    } else {
+                        item.video?.firstOrNull() ?: ""
+                    },
                     date = item.date ?: "",
                     views = "1K"
                 )
@@ -175,7 +177,10 @@ fun VideoItemCard(video: VideoArticle, onClick: () -> Unit) {
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = video.description,
+                text = android.text.Html.fromHtml(
+                    video.description ?: "",
+                    android.text.Html.FROM_HTML_MODE_LEGACY
+                ).toString(),
                 fontSize = 14.sp,
                 color = TextBlack,
                 maxLines = 2,
