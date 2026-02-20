@@ -1,6 +1,5 @@
-
-
-import android.webkit.WebView
+import android.net.Uri
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,17 +15,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.rememberAsyncImagePainter
 import com.example.iqrarnewscompose.TextBlack
 import com.example.iqrarnewscompose.TextGray
 import com.example.iqrarnewscompose.NewsViewModel
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 
+
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
+import androidx.compose.ui.platform.LocalContext
 
 data class VideoArticle(
     val title: String,
@@ -42,21 +49,19 @@ fun VideosScreen(
     currentLanguage: String,
     viewModel: NewsViewModel
 ) {
-    var selectedVideoUrl by remember { mutableStateOf<String?>(null) }
     var showLoader by remember { mutableStateOf(true) }
+    var playingVideoId by remember { mutableStateOf<String?>(null) }
 
     val videoNews = remember { mutableStateListOf<com.example.iqrarnewscompose.api.ApiNewsArticle>() }
 
     LaunchedEffect(Unit) {
         showLoader = true
-        viewModel.loadNewsSeparate("Home") { data: List<com.example.iqrarnewscompose.api.ApiNewsArticle> ->
+        viewModel.loadNewsSeparate("84a69d51-4e22-4d76-b700-0d51aee23e37") { data ->
             videoNews.clear()
             videoNews.addAll(data)
             showLoader = false
         }
     }
-
-
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -76,45 +81,31 @@ fun VideosScreen(
                 )
             }
 
-            selectedVideoUrl?.let { url ->
-                item {
-                    AndroidView(
-                        factory = { context ->
-                            WebView(context).apply {
-                                settings.javaScriptEnabled = true
-                                loadUrl(url)
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(220.dp)
-                            .padding(horizontal = 16.dp)
-                    )
-                }
-            }
-//This section of videos has been done
             items(videoNews) { item ->
-
-                val context = LocalContext.current
 
                 val videoArticle = VideoArticle(
                     title = item.name ?: "",
                     description = item.content ?: "",
                     thumbUrl = item.icon ?: "",
-                    videoUrl = if (!item.youtube_url.isNullOrEmpty() && item.youtube_url.first().isNotEmpty()) {
-                        "videoUrl = https://www.youtube.com/watch?v=dQw4w9WgXcQ,"
-                    } else {
-                        item.video?.firstOrNull() ?: ""
+                    videoUrl = when {
+                        !item.youtube_url.isNullOrEmpty() && item.youtube_url.first().isNotEmpty() ->
+                            item.youtube_url.first()
+                        else ->
+                            item.video?.firstOrNull() ?: ""
                     },
                     date = item.date ?: "",
                     views = "1K"
                 )
 
-
-                VideoItemCard(videoArticle) {
-                    if (videoArticle.videoUrl.isNotEmpty()) {
-                        selectedVideoUrl = videoArticle.videoUrl
-                    }
+                if (videoArticle.videoUrl.isNotEmpty()) {
+                    VideoItemCard(
+                        video = videoArticle,
+                        isPlaying = playingVideoId == item.id,
+                        onPlayClick = {
+                            playingVideoId =
+                                if (playingVideoId == item.id) null else item.id
+                        }
+                    )
                 }
             }
 
@@ -131,37 +122,106 @@ fun VideosScreen(
 }
 
 @Composable
-fun VideoItemCard(video: VideoArticle, onClick: () -> Unit) {
+fun VideoItemCard(
+    video: VideoArticle,
+    isPlaying: Boolean,
+    onPlayClick: () -> Unit
+) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 24.dp)
-            .clickable { onClick() }
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-                    .padding(horizontal = 16.dp)
-            ) {
-                Image(
-                    painter = rememberAsyncImagePainter(video.thumbUrl),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+
+        if (isPlaying) {
+
+
+            if (isDirectVideo(video.videoUrl)) {
+
+                val exoPlayer = remember(video.videoUrl) {
+                    ExoPlayer.Builder(context).build().apply {
+                        setMediaItem(MediaItem.fromUri(video.videoUrl))
+                        prepare()
+                        playWhenReady = true
+                    }
+                }
+
+                DisposableEffect(Unit) {
+                    onDispose { exoPlayer.release() }
+                }
+
+                AndroidView(
+                    factory = {
+                        PlayerView(context).apply {
+                            player = exoPlayer
+                            useController = true
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .padding(horizontal = 16.dp)
                 )
+
+            } else {
+
+
+                val videoId = extractYouTubeVideoId(video.videoUrl)
+
+                if (videoId.isNotEmpty()) {
+                    key(videoId) {
+                        AndroidView(
+                            factory = { context ->
+                                YouTubePlayerView(context).apply {
+                                    lifecycleOwner.lifecycle.addObserver(this)
+                                    addYouTubePlayerListener(object : AbstractYouTubePlayerListener() {
+                                        override fun onReady(youTubePlayer: YouTubePlayer) {
+                                            youTubePlayer.loadVideo(videoId, 0f)
+                                        }
+                                    })
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp)
+                                .padding(horizontal = 16.dp)
+                        )
+                    }
+                }
             }
 
-            Icon(
-                imageVector = Icons.Default.PlayCircleFilled,
-                contentDescription = "Play",
-                tint = Color.Red,
-                modifier = Modifier
-                    .size(60.dp)
-                    .background(Color.White, shape = RoundedCornerShape(50))
-            )
+        } else {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.clickable { onPlayClick() }
+            ) {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .padding(horizontal = 16.dp)
+                ) {
+                    Image(
+                        painter = rememberAsyncImagePainter(video.thumbUrl),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Default.PlayCircleFilled,
+                    contentDescription = "Play",
+                    tint = Color.Red,
+                    modifier = Modifier
+                        .size(60.dp)
+                        .background(Color.White, shape = RoundedCornerShape(50))
+                )
+            }
         }
 
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -195,17 +255,33 @@ fun VideoItemCard(video: VideoArticle, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.DateRange, null, tint = TextGray, modifier = Modifier.size(14.dp))
-                    Text(text = " ${video.date}", fontSize = 11.sp, color = TextGray)
+                    Text(" ${video.date}", fontSize = 11.sp, color = TextGray)
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.RemoveRedEye, null, tint = TextGray, modifier = Modifier.size(14.dp))
-                    Text(text = " ${video.views} views", fontSize = 11.sp, color = TextGray)
+                    Text(" ${video.views} views", fontSize = 11.sp, color = TextGray)
                 }
             }
         }
     }
+}
+
+fun extractYouTubeVideoId(url: String): String {
+    return when {
+        url.contains("youtu.be/") ->
+            url.substringAfter("youtu.be/").substringBefore("?")
+        url.contains("youtube.com/watch") ->
+            Uri.parse(url).getQueryParameter("v") ?: ""
+        url.contains("youtube.com/shorts/") ->
+            url.substringAfter("shorts/").substringBefore("?")
+        else -> ""
+    }
+}
+fun isDirectVideo(url: String): Boolean {
+    return url.contains(".mp4") ||
+            url.contains(".m3u8") ||
+            url.contains(".mpd")
 }

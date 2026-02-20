@@ -54,42 +54,31 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.runtime:runtime-saveable")
 
-    // Coil (Image loading)
     implementation("io.coil-kt:coil-compose:2.5.0")
-
-    // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
-
-    // Retrofit (API calling)
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-
-    // ✅ Coroutines - IDI ADD CHESANU (API async calls kosam)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.9.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.code.gson:gson:2.10.1")
 
-    // ViewModel for API data
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
+    // ✅ YouTube Player (already using)
+    implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:12.1.0")
 
-    // Debug & Test
+    // ✅ ExoPlayer (Media3) – OWN UPLOADED VIDEOS
+    implementation("androidx.media3:media3-exoplayer:1.6.1")
+    implementation("androidx.media3:media3-ui:1.6.1")
+    implementation("androidx.media3:media3-common:1.6.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.6.1")
+
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    implementation("com.squareup.okhttp3:logging-interceptor:4.9.0")
-    dependencies {
-        // ... your existing dependencies ...
-
-        // 🆕 ADD THESE ONLY
-        implementation("com.squareup.retrofit2:retrofit:2.9.0")
-        implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-        implementation("com.squareup.okhttp3:okhttp:4.12.0")
-        implementation("com.google.code.gson:gson:2.10.1")
-        implementation("io.coil-kt:coil-compose:2.5.0")
-        implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
-    }
 }

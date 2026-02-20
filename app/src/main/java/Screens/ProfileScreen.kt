@@ -37,7 +37,6 @@ fun ProfileScreen(onToggleHeader: (Boolean) -> Unit) {
     val context = LocalContext.current
     var localView by remember { mutableStateOf("Main") }
 
-    // Handle Hardware Back Button
     BackHandler(enabled = localView != "Main") {
         localView = "Main"
         onToggleHeader(true)
@@ -58,7 +57,7 @@ fun ProfileScreen(onToggleHeader: (Boolean) -> Unit) {
                         val intent = Intent(Intent.ACTION_SENDTO).apply {
                             data = Uri.parse("mailto:contact@iqrartimes.com")
                         }
-                        try { context.startActivity(intent) } catch (e: Exception) { }
+                        try { context.startActivity(intent) } catch (_: Exception) {}
                     }
                 )
             }
@@ -91,20 +90,37 @@ fun ProfileMenuView(onNavigate: (String) -> Unit, onContactClick: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(30.dp))
-        Button(onClick = { }, colors = ButtonDefaults.buttonColors(containerColor = BrandRed), shape = RoundedCornerShape(8.dp), modifier = Modifier.width(220.dp).height(48.dp)) {
-            Text("SIGN IN / SIGN UP", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+        Button(
+            onClick = { },
+            colors = ButtonDefaults.buttonColors(containerColor = BrandRed),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.width(220.dp).height(48.dp)
+        ) {
+            Text(
+                "SIGN IN / SIGN UP",
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                fontSize = 14.sp
+            )
         }
+
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "Sign in to access your saved articles and personalized recommendations.", textAlign = TextAlign.Center, color = TextBlack, fontSize = 14.sp)
+        Text(
+            text = "Sign in to access your saved articles and personalized recommendations.",
+            textAlign = TextAlign.Center,
+            color = TextBlack,
+            fontSize = 14.sp
+        )
 
         Spacer(modifier = Modifier.height(35.dp))
 
-        // GRID SECTION
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ProfileGridItem(Icons.Default.Language, "Language", Modifier.weight(1f))
             ProfileGridItem(Icons.Default.Notifications, "Notifications", Modifier.weight(1f))
         }
+
         Spacer(modifier = Modifier.height(12.dp))
+
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ProfileGridItem(Icons.Default.Settings, "Preferences", Modifier.weight(1f))
             ProfileGridItem(Icons.Default.Info, "About", Modifier.weight(1f))
@@ -112,7 +128,6 @@ fun ProfileMenuView(onNavigate: (String) -> Unit, onContactClick: () -> Unit) {
 
         Spacer(modifier = Modifier.height(30.dp))
 
-        // LIST SECTION
         ProfileListTile(Icons.Default.Security, "Privacy Policy") { onNavigate("Privacy") }
         ProfileListTile(Icons.Default.Description, "Terms & Conditions") { onNavigate("Terms") }
         ProfileListTile(Icons.Default.Email, "Contact") { onContactClick() }
@@ -131,25 +146,74 @@ fun LocalWebViewScreen(title: String, url: String, onBack: () -> Unit) {
             IconButton(onClick = onBack) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = BrandRed)
             }
-            Text(text = title, fontWeight = FontWeight.Bold, color = TextBlack, fontSize = 18.sp, modifier = Modifier.padding(start = 8.dp))
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold,
+                color = TextBlack,
+                fontSize = 18.sp,
+                modifier = Modifier.padding(start = 8.dp)
+            )
         }
+
         Divider(color = Color(0xFFEEEEEE), thickness = 1.dp)
 
-        AndroidView(factory = { context ->
-            WebView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                webViewClient = WebViewClient()
-                loadUrl(url)
-            }
-        }, modifier = Modifier.fillMaxSize())
+        AndroidView(
+            factory = { context ->
+                WebView(context).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, loadedUrl: String?) {
+                            super.onPageFinished(view, loadedUrl)
+
+
+                            if (loadedUrl?.contains("privacy-policy") == true || loadedUrl?.contains("terms-of-service") == true) {
+                                view?.evaluateJavascript(
+                                    """
+                                    (function() {
+                                        document.body.style.marginTop = '0px';
+                                        document.body.style.paddingTop = '0px';
+
+                                        var main = document.querySelector('main');
+                                        if(main){
+                                            main.style.marginTop = '0px';
+                                            main.style.paddingTop = '0px';
+                                        }
+
+                                        var header = document.querySelector('header');
+                                        if(header){
+                                            header.style.display = 'none';
+                                        }
+                                    })();
+                                    """.trimIndent(),
+                                    null
+                                )
+                            }
+                        }
+                    }
+
+                    loadUrl(url)
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 
 @Composable
 fun ProfileGridItem(icon: ImageVector, text: String, modifier: Modifier = Modifier) {
-    OutlinedButton(onClick = { }, shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, Color(0xFFE0E0E0)), modifier = modifier.height(65.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = TextBlack)) {
+    OutlinedButton(
+        onClick = { },
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+        modifier = modifier.height(65.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextBlack)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, modifier = Modifier.size(22.dp), tint = TextBlack)
             Spacer(Modifier.width(10.dp))
@@ -161,10 +225,20 @@ fun ProfileGridItem(icon: ImageVector, text: String, modifier: Modifier = Modifi
 @Composable
 fun ProfileListTile(icon: ImageVector, label: String, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).height(60.dp).clickable { onClick() },
-        shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), border = BorderStroke(1.dp, Color(0xFFF0F0F0))
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .height(60.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(1.dp),
+        border = BorderStroke(1.dp, Color(0xFFF0F0F0))
     ) {
-        Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Icon(icon, null, tint = TextBlack, modifier = Modifier.size(22.dp))
             Spacer(modifier = Modifier.width(18.dp))
             Text(label, color = TextBlack, fontSize = 15.sp, fontWeight = FontWeight.Medium)
