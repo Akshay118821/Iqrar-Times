@@ -1026,7 +1026,7 @@ fun SpecialBanner(tit: String, des: String, btn: String, img: String, onClick: (
         }
     }
 }
-
+// This is the section For special Banners
 @Composable
 fun IqrarBottomBar(sel: String, lang: String, onNavigate: (String) -> Unit) {
     NavigationBar(containerColor = Color.White, tonalElevation = 8.dp) {
