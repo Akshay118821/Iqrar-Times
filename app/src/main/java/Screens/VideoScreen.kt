@@ -27,8 +27,8 @@ import com.example.iqrarnewscompose.TextGray
 import com.example.iqrarnewscompose.NewsViewModel
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.options.IFramePlayerOptions
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
-
 
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
@@ -64,13 +64,11 @@ fun VideosScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.White)
         ) {
-
             item {
                 Text(
                     text = if (currentLanguage == "Hindi") "वीडियो" else "Videos",
@@ -82,7 +80,6 @@ fun VideosScreen(
             }
 
             items(videoNews) { item ->
-
                 val videoArticle = VideoArticle(
                     title = item.name ?: "",
                     description = item.content ?: "",
@@ -93,7 +90,7 @@ fun VideosScreen(
                         else ->
                             item.video?.firstOrNull() ?: ""
                     },
-                    date = item.date ?: "",
+                    date = formatDisplayDate(item.date ?: ""),
                     views = "1K"
                 )
 
@@ -102,13 +99,11 @@ fun VideosScreen(
                         video = videoArticle,
                         isPlaying = playingVideoId == item.id,
                         onPlayClick = {
-                            playingVideoId =
-                                if (playingVideoId == item.id) null else item.id
+                            playingVideoId = if (playingVideoId == item.id) null else item.id
                         }
                     )
                 }
             }
-
             item { Spacer(modifier = Modifier.height(20.dp)) }
         }
 
@@ -135,12 +130,8 @@ fun VideoItemCard(
             .fillMaxWidth()
             .padding(bottom = 24.dp)
     ) {
-
         if (isPlaying) {
-
-
             if (isDirectVideo(video.videoUrl)) {
-
                 val exoPlayer = remember(video.videoUrl) {
                     ExoPlayer.Builder(context).build().apply {
                         setMediaItem(MediaItem.fromUri(video.videoUrl))
@@ -148,11 +139,9 @@ fun VideoItemCard(
                         playWhenReady = true
                     }
                 }
-
                 DisposableEffect(Unit) {
                     onDispose { exoPlayer.release() }
                 }
-
                 AndroidView(
                     factory = {
                         PlayerView(context).apply {
@@ -165,34 +154,45 @@ fun VideoItemCard(
                         .height(220.dp)
                         .padding(horizontal = 16.dp)
                 )
-
             } else {
-
-
                 val videoId = extractYouTubeVideoId(video.videoUrl)
-
                 if (videoId.isNotEmpty()) {
-                    key(videoId) {
+                    Box(modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .padding(horizontal = 16.dp)) {
+
+                        val playerView = remember(videoId) {
+                            YouTubePlayerView(context).apply {
+                                enableAutomaticInitialization = false
+                                val options = IFramePlayerOptions.Builder()
+                                    .controls(1)
+                                    .fullscreen(1)
+                                    .build()
+
+                                initialize(object : AbstractYouTubePlayerListener() {
+                                    override fun onReady(youTubePlayer: YouTubePlayer) {
+                                        youTubePlayer.loadVideo(videoId, 0f)
+                                    }
+                                }, options)
+                            }
+                        }
+
+                        DisposableEffect(playerView) {
+                            lifecycleOwner.lifecycle.addObserver(playerView)
+                            onDispose {
+                                lifecycleOwner.lifecycle.removeObserver(playerView)
+                                playerView.release()
+                            }
+                        }
+
                         AndroidView(
-                            factory = { context ->
-                                YouTubePlayerView(context).apply {
-                                    lifecycleOwner.lifecycle.addObserver(this)
-                                    addYouTubePlayerListener(object : AbstractYouTubePlayerListener() {
-                                        override fun onReady(youTubePlayer: YouTubePlayer) {
-                                            youTubePlayer.loadVideo(videoId, 0f)
-                                        }
-                                    })
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(220.dp)
-                                .padding(horizontal = 16.dp)
+                            factory = { playerView },
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
             }
-
         } else {
             Box(
                 contentAlignment = Alignment.Center,
@@ -225,7 +225,6 @@ fun VideoItemCard(
         }
 
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-
             Text(
                 text = video.title,
                 fontSize = 18.sp,
@@ -238,7 +237,7 @@ fun VideoItemCard(
 
             Text(
                 text = android.text.Html.fromHtml(
-                    video.description ?: "",
+                    video.description,
                     android.text.Html.FROM_HTML_MODE_LEGACY
                 ).toString(),
                 fontSize = 14.sp,
@@ -272,16 +271,28 @@ fun VideoItemCard(
 fun extractYouTubeVideoId(url: String): String {
     return when {
         url.contains("youtu.be/") ->
-            url.substringAfter("youtu.be/").substringBefore("?")
+            url.substringAfter("youtu.be/").substringBefore("?").substringBefore("&")
         url.contains("youtube.com/watch") ->
             Uri.parse(url).getQueryParameter("v") ?: ""
         url.contains("youtube.com/shorts/") ->
-            url.substringAfter("shorts/").substringBefore("?")
+            url.substringAfter("shorts/").substringBefore("?").substringBefore("&")
+        url.contains("v=") ->
+            url.substringAfter("v=").substringBefore("&")
         else -> ""
     }
 }
+
 fun isDirectVideo(url: String): Boolean {
-    return url.contains(".mp4") ||
-            url.contains(".m3u8") ||
-            url.contains(".mpd")
+    val lowerUrl = url.lowercase()
+    return lowerUrl.contains(".mp4") ||
+            lowerUrl.contains(".m3u8") ||
+            lowerUrl.contains(".mpd")
+}
+
+fun formatDisplayDate(dateString: String): String {
+    return try {
+        dateString.split("T").first()
+    } catch (e: Exception) {
+        dateString
+    }
 }
