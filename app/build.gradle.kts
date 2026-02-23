@@ -94,6 +94,7 @@ dependencies {
 //This the things working on
     implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:12.1.2")
     implementation("com.pierfrancescosoffritti.androidyoutubeplayer:custom-ui:12.1.2")
+    implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:12.1.0")
 
     implementation("androidx.media3:media3-exoplayer:1.9.2")
     implementation("androidx.media3:media3-ui:1.4.1")

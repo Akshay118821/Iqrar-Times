@@ -132,6 +132,7 @@ fun VideoItemCard(
     ) {
         if (isPlaying) {
             if (isDirectVideo(video.videoUrl)) {
+                // ExoPlayer for MP4/M3U8
                 val exoPlayer = remember(video.videoUrl) {
                     ExoPlayer.Builder(context).build().apply {
                         setMediaItem(MediaItem.fromUri(video.videoUrl))
@@ -155,45 +156,34 @@ fun VideoItemCard(
                         .padding(horizontal = 16.dp)
                 )
             } else {
+                // YouTube Player - SIMPLE VERSION
                 val videoId = extractYouTubeVideoId(video.videoUrl)
+//val videoId = "VP212b8xDoQ"
                 if (videoId.isNotEmpty()) {
-                    Box(modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp)
-                        .padding(horizontal = 16.dp)) {
-
-                        val playerView = remember(videoId) {
-                            YouTubePlayerView(context).apply {
-                                enableAutomaticInitialization = false
-                                val options = IFramePlayerOptions.Builder()
-                                    .controls(1)
-                                    .fullscreen(1)
-                                    .build()
-
-                                initialize(object : AbstractYouTubePlayerListener() {
-                                    override fun onReady(youTubePlayer: YouTubePlayer) {
-                                        youTubePlayer.loadVideo(videoId, 0f)
-                                    }
-                                }, options)
+                    AndroidView(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp).padding(horizontal = 16.dp), factory = {
+                            val view = YouTubePlayerView(it)
+                            lifecycleOwner.lifecycle.addObserver(view) // Add observer
+//                val videoId = getVideoIdFromYoutubeUrl(item.youtube_urls?.first()) ?: ""
+                            val fragment = object : AbstractYouTubePlayerListener() {
+                                override fun onReady(youTubePlayer: YouTubePlayer) {
+                                    super.onReady(youTubePlayer)
+                                    youTubePlayer.loadVideo(videoId, 0f)
+                                }
                             }
-                        }
+                            val iFramePlayerOptions =
+                                IFramePlayerOptions.Builder().controls(1).origin("https://development.d17rp0i235ot66.amplifyapp.com/").fullscreen(0).build()
 
-                        DisposableEffect(playerView) {
-                            lifecycleOwner.lifecycle.addObserver(playerView)
-                            onDispose {
-                                lifecycleOwner.lifecycle.removeObserver(playerView)
-                                playerView.release()
-                            }
-                        }
-
-                        AndroidView(
-                            factory = { playerView },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+                            view.enableAutomaticInitialization = false
+                            view.initialize(fragment, iFramePlayerOptions)
+                            view
+                        })
                 }
             }
         } else {
+            // Thumbnail
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.clickable { onPlayClick() }
@@ -212,18 +202,16 @@ fun VideoItemCard(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-
                 Icon(
                     imageVector = Icons.Default.PlayCircleFilled,
                     contentDescription = "Play",
                     tint = Color.Red,
-                    modifier = Modifier
-                        .size(60.dp)
-                        .background(Color.White, shape = RoundedCornerShape(50))
+                    modifier = Modifier.size(60.dp)
                 )
             }
         }
 
+        // Video Details
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(
                 text = video.title,
@@ -232,9 +220,7 @@ fun VideoItemCard(
                 color = TextBlack,
                 lineHeight = 24.sp
             )
-
             Spacer(modifier = Modifier.height(4.dp))
-
             Text(
                 text = android.text.Html.fromHtml(
                     video.description,
@@ -246,9 +232,7 @@ fun VideoItemCard(
                 overflow = TextOverflow.Ellipsis,
                 lineHeight = 20.sp
             )
-
             Spacer(modifier = Modifier.height(8.dp))
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -258,7 +242,6 @@ fun VideoItemCard(
                     Icon(Icons.Default.DateRange, null, tint = TextGray, modifier = Modifier.size(14.dp))
                     Text(" ${video.date}", fontSize = 11.sp, color = TextGray)
                 }
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.RemoveRedEye, null, tint = TextGray, modifier = Modifier.size(14.dp))
                     Text(" ${video.views} views", fontSize = 11.sp, color = TextGray)
@@ -267,7 +250,6 @@ fun VideoItemCard(
         }
     }
 }
-
 fun extractYouTubeVideoId(url: String): String {
     return when {
         url.contains("youtu.be/") ->
