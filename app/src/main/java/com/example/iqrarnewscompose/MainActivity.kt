@@ -528,11 +528,11 @@ fun HomeScreen(
     viewModel: NewsViewModel
 ){var showLoader by remember { mutableStateOf(viewModel.newsList.isEmpty()) }
 
-LaunchedEffect(Unit) {
-    viewModel.loadNews("Home") {
-        showLoader = false
+    LaunchedEffect(lang) {
+        viewModel.loadNews("Home") {
+            showLoader = false
+        }
     }
-}
 
 
     val newsList = viewModel.newsList
@@ -790,7 +790,7 @@ fun DynamicCategorySection(
                 modifier = Modifier
                     .padding(end = 24.dp)
                     .clickable {
-                        onClick(id)
+                        onClick(id.toString())
                     }
             ) {
                 Text(

@@ -6,10 +6,12 @@ import okhttp3.OkHttpClient
 import com.example.iqrarnewscompose.api.ApiService
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
-
+import com.example.iqrarnewscompose.BuildConfig
 object RetrofitInstance {
 
-    private const val BASE_URL = "https://api.iqrartimes.com/"
+
+    private const val BASE_URL = BuildConfig.BASE_URL
+
 
     private val client by lazy {
         val logging = HttpLoggingInterceptor()

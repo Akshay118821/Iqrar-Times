@@ -8,11 +8,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.iqrarnewscompose"
+    //    applicationId = "com.example.iqrarnewscompose"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+       // versionCode = 1
+      //  versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -22,12 +22,18 @@ android {
     }
 
     buildTypes {
-        release {
-            isMinifyEnabled = false
+        getByName("release") {
+
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 
@@ -38,6 +44,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -49,6 +56,30 @@ android {
             excludes += "META-INF/NOTICE"
             excludes += "META-INF/NOTICE.txt"
             excludes += "mozilla/public-suffix-list.txt"
+        }
+    }
+    flavorDimensions += "appType"
+    productFlavors{
+        create("stage"){
+            dimension = "appType"
+            versionCode = 1
+            applicationId = "com.example.iqrarnewscompose.debug"
+            versionName = "1.00"
+
+       //    resValue("string", "app_name", "Dev IqrarNewsCompose")
+
+            buildConfigField("String", "BASE_URL", "\"https://api.iqrartimes.com/\"")
+        }
+
+        create("prod"){
+            dimension = "appType"
+            versionCode = 1
+            applicationId = "com.example.iqrarnewscompose"
+            versionName = "1.00"
+
+          //  resValue("string", "app_name", "IqrarNewsCompose")
+
+            buildConfigField("String", "BASE_URL", "\"https://api.iqrartimes.com/\"")
         }
     }
 }
