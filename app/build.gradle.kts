@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.gms.google.services)
+    alias(libs.plugins.google.firebase.crashlytics)
 }
 
 android {
@@ -30,6 +32,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             isMinifyEnabled = false
@@ -131,6 +134,7 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("androidx.media3:media3-common:1.4.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
+    implementation(libs.firebase.crashlytics)
 
 
     debugImplementation(libs.androidx.compose.ui.tooling)
@@ -147,4 +151,4 @@ dependencies {
         implementation("androidx.core:core-ktx:1.12.0")
     }
 
-// Changes are done in this file
+// No more changes are done in this code at present

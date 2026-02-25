@@ -35,6 +35,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.compose.ui.platform.LocalContext
 
+//No more Changes are required
 data class VideoArticle(
     val title: String,
     val description: String,

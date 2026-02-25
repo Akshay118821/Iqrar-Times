@@ -14,7 +14,7 @@
         android:largeHeap="true"
         android:hardwareAccelerated="true"
         android:theme="@style/Theme.IqrarNewsCompose">
-
+<!----> some of the changes are done in the codes
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

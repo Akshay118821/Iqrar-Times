@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "394238099253",
+    "project_id": "iqrartimes-7a935",
+    "storage_bucket": "iqrartimes-7a935.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:394238099253:android:694ad5ca348eb2008ed67c",
+        "android_client_info": {
+          "package_name": "com.example.iqrarnewscompose"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8jUgHfnrgf2JNpE-T_UGviYhcL-keFWE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
