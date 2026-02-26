@@ -17,6 +17,7 @@ class NewsViewModel : ViewModel() {
 
     var isLoading = mutableStateOf(false)
 
+
     private val newsCache = mutableMapOf<String, List<ApiNewsArticle>>()
 
     fun loadCategories(lang: String) {
@@ -31,24 +32,35 @@ class NewsViewModel : ViewModel() {
         }
     }
 
-    fun loadNews(category: String, onDataLoaded: () -> Unit = {}) {
+    fun loadNews(category: String, langParam: String, onDataLoaded: () -> Unit = {}) {
         viewModelScope.launch {
-            if (newsCache.containsKey(category)) {
+
+
+            val cacheKey = "$category-$langParam"
+
+            if (newsCache.containsKey(cacheKey)) {
                 newsList.clear()
-                newsList.addAll(newsCache[category]!!)
+                newsList.addAll(newsCache[cacheKey]!!)
                 onDataLoaded()
                 return@launch
             }
+
             try {
                 isLoading.value = true
-                newsList.clear()
-                val data = if (category == "Home" || category == "HOME") {
-                    repo.getAllNews()
+                newsList.clear() // Clear old data first
+
+                // 2. Repo ki Language Pass Chestunnam
+                val data = if (category == "Home" || category == "HOME" || category == "") {
+                    // ⚠️ IMPORTANT: Repository function must accept language
+                    repo.getAllNews(langParam)
                 } else {
-                    repo.getNewsByCategory(category)
+                    repo.getNewsByCategory(category, langParam)
                 }
-                newsCache[category] = data
+
+                // 3. Save to cache with language key
+                newsCache[cacheKey] = data
                 newsList.addAll(data)
+
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
@@ -58,20 +70,14 @@ class NewsViewModel : ViewModel() {
         }
     }
 
+    // ... Video load function ...
     fun loadNewsSeparate(category: String, onDataLoaded: (List<ApiNewsArticle>) -> Unit) {
+        // Indhulo kuda avasaram aithe lang param add cheyali later
         viewModelScope.launch {
             try {
-                val data = if (category == "Home" || category == "HOME") {
-                    repo.getAllNews()
-                } else {
-                    repo.getNewsByCategory(category)
-                }
-                data.forEach {
-                    android.util.Log.d("VIDEO_DEBUG", "youtube: ${it.youtube_url}, video: ${it.video}")
-                }
+                val data = repo.getAllNews("HINDI") // Default HINDI for now
                 onDataLoaded(data)
             } catch (e: Exception) {
-                e.printStackTrace()
                 onDataLoaded(emptyList())
             }
         }

@@ -135,6 +135,7 @@ dependencies {
     implementation("androidx.media3:media3-common:1.4.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
     implementation(libs.firebase.crashlytics)
+    implementation(libs.androidx.compose.ui.text)
 
 
     debugImplementation(libs.androidx.compose.ui.tooling)
@@ -149,6 +150,9 @@ dependencies {
         implementation("io.coil-kt:coil-compose:2.5.0")
         implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
         implementation("androidx.core:core-ktx:1.12.0")
+
+    implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
     }
 
 // No more changes are done in this code at present

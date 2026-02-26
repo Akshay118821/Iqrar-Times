@@ -1,13 +1,13 @@
+
 package com.example.iqrarnewscompose.api
 
 class NewsRepository {
 
     private val api = RetrofitInstance.api
 
-
-    suspend fun getAllNews(): List<ApiNewsArticle> {
+    suspend fun getAllNews(langParam: String): List<ApiNewsArticle> {
         return try {
-            val response = api.getAllNews()
+            val response = api.getAllNews(langParam)
             if (response.isSuccessful) {
                 response.body()?.data ?: emptyList()
             } else {
@@ -17,9 +17,12 @@ class NewsRepository {
             emptyList()
         }
     }
-    suspend  fun getNewsByCategory(categoryId: String): List<ApiNewsArticle> {
+
+    // ✅ CHANGED: langParam ni api.getNewsByCategory ki pass chesam
+    suspend fun getNewsByCategory(categoryId: String, langParam: String): List<ApiNewsArticle> {
         return try {
-            val response = api.getNewsByCategory(categoryId)
+            // Ikkada kuda language pass chesthunnam
+            val response = api.getNewsByCategory(categoryId, langParam)
             if (response.isSuccessful) {
                 response.body()?.data ?: emptyList()
             } else {

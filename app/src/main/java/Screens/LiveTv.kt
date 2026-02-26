@@ -1,5 +1,7 @@
 package com.example.iqrarnewscompose.Screens
 
+import VideoArticle
+import VideoItemCard
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,9 +10,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,55 +22,224 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
-import com.example.iqrarnewscompose.BrandRed
-import com.example.iqrarnewscompose.TextBlack
-import com.example.iqrarnewscompose.TextGray
-
-data class LiveItem(val thumbUrl: String, val title: String, val meta: String)
+import com.example.iqrarnewscompose.*
+import com.example.iqrarnewscompose.api.ApiNewsArticle
+import formatDisplayDate
 
 @Composable
-fun LiveTVScreen(currentLanguage: String) {
-    val liveList = listOf(
-        LiveItem("https://i.ibb.co/b155FKJ/black-thumb.png", "Breaking: New Climate Report", "1h ago • 10 min read"),
-        LiveItem("https://i.ibb.co/NFxqXqK/muslim-news-thumb.png", "Tech Giants Face Antitrust", "2h ago • 15 min read"),
-        LiveItem("https://i.ibb.co/tPKyd1P/breaking-news-thumb.png", "Local Elections: Key Races", "3h ago • 8 min read")
-    )
+fun LiveTVScreen(
+    lang: String,
+    viewModel: NewsViewModel
+) {
 
-    LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        item {
-            Text("Live News", fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(16.dp))
+    var showLoader by remember { mutableStateOf(true) }
+    var selectedItem by remember { mutableStateOf<ApiNewsArticle?>(null) }
 
-            // ✅ MAIN BLACK LIVE CARD
-            Box(Modifier.padding(horizontal = 16.dp).clickable { }, contentAlignment = Alignment.Center) {
-                Card(shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().height(220.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF111118))) {
-                    Image(rememberAsyncImagePainter("https://i.ibb.co/4W6xm7V/live-streaming-banner.png"), null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(24.dp))
-                }
-            }
+    val liveNews = remember { mutableStateListOf<ApiNewsArticle>() }
 
-            Text("Live Coverage: Masjid Al-Aqsa Developments", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(16.dp))
-            Row(Modifier.padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Watch Live", color = BrandRed, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(6.dp))
-                Box(Modifier.size(8.dp).background(BrandRed, RoundedCornerShape(50)))
-            }
-            Spacer(Modifier.height(16.dp))
+    LaunchedEffect(lang) {
+        showLoader = true
+        val langParam = if (lang == "Hindi") "HINDI" else "ENGLISH"
+
+        viewModel.loadNews("84a69d51-4e22-4d76-b700-0d51aee23e37", langParam) {
+            liveNews.clear()
+            liveNews.addAll(viewModel.newsList)
+
+            selectedItem = liveNews.firstOrNull()   // ✅ default trending
+            showLoader = false
         }
+    }
 
-        items(liveList) { item ->
-            Row(Modifier.fillMaxWidth().padding(16.dp, 8.dp).clickable { }, verticalAlignment = Alignment.CenterVertically) {
-                Card(shape = RoundedCornerShape(8.dp), modifier = Modifier.size(100.dp, 70.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF2F2F2))
+    ) {
+
+        // ✅ Title
+        Text(
+            text = if (lang == "Hindi") "लाइव न्यूज़" else "Live News",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(16.dp)
+        )
+
+        // ✅ STATIC BIG CARD CONTAINER
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .padding(horizontal = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Black)
+        ) {
+
+            selectedItem?.let { item ->
+
+                val videoUrl = when {
+                    !item.youtube_url.isNullOrEmpty() && item.youtube_url.first().isNotEmpty() ->
+                        item.youtube_url.first()
+                    else ->
+                        item.video?.firstOrNull() ?: ""
+                }
+
+                if (videoUrl.isNotEmpty()) {
+
+                    // ✅ PLAYER INSIDE FIXED CARD
+                    VideoItemCard(
+                        video = VideoArticle(
+                            title = item.name ?: "",
+                            description = item.content ?: "",
+                            thumbUrl = item.icon ?: "",
+                            videoUrl = videoUrl,
+                            date = formatDisplayDate(item.date ?: ""),
+                            views = "1K"
+                        ),
+                        isPlaying = true,
+                        onPlayClick = {}
+                    )
+                } else {
+                    // fallback LIVE banner if no video
                     Box(contentAlignment = Alignment.Center) {
-                        Image(rememberAsyncImagePainter(item.thumbUrl), null, contentScale = ContentScale.Crop)
-                        Icon(Icons.Default.PlayCircleFilled, null, tint = Color.Red)
+                        Text(
+                            "LIVE STREAMING",
+                            color = Color.Red,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(item.title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    Text(item.meta, color = TextGray, fontSize = 12.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // ✅ Headline Section (Static Style)
+        selectedItem?.let {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Text(
+                    it.name ?: "",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Watch Live",
+                        color = Color.Red,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(Color.Red, RoundedCornerShape(50))
+                    )
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // ✅ SMALL CARDS LIST (Scrollable)
+        LazyColumn {
+
+            items(liveNews) { item ->
+
+                if (item.id != selectedItem?.id) {
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedItem = item }   // ✅ only update big card
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.size(100.dp, 70.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Image(
+                                    painter = rememberAsyncImagePainter(item.icon),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.PlayCircleFilled,
+                                    contentDescription = null,
+                                    tint = Color.Red
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column {
+                            Text(
+                                item.name ?: "",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            Text(
+                                formatDisplayDate(item.date ?: ""),
+                                fontSize = 12.sp,
+                                color = TextGray
+                            )
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(20.dp)) }
+        }
+
+        if (showLoader) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = BrandRed)
             }
         }
     }
 }
-//Some  of the changes done in the code
+
+@Composable
+fun FullScreenVideoPlayer(
+    videoUrl: String,
+    onClose: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+
+        VideoItemCard(
+            video = VideoArticle(
+                title = "",
+                description = "",
+                thumbUrl = "",
+                videoUrl = videoUrl,
+                date = "",
+                views = ""
+            ),
+            isPlaying = true,
+            onPlayClick = {}
+        )
+
+        IconButton(
+            onClick = onClose,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+        ) {
+            Icon(Icons.Default.Close, contentDescription = null, tint = Color.White)
+        }
+    }
+}

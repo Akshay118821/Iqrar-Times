@@ -55,11 +55,14 @@ fun VideosScreen(
 
     val videoNews = remember { mutableStateListOf<com.example.iqrarnewscompose.api.ApiNewsArticle>() }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(currentLanguage) {
         showLoader = true
-        viewModel.loadNewsSeparate("84a69d51-4e22-4d76-b700-0d51aee23e37") { data ->
+
+        val langParam = if (currentLanguage == "Hindi") "HINDI" else "ENGLISH"
+
+        viewModel.loadNews("84a69d51-4e22-4d76-b700-0d51aee23e37", langParam) {
             videoNews.clear()
-            videoNews.addAll(data)
+            videoNews.addAll(viewModel.newsList)
             showLoader = false
         }
     }
@@ -157,7 +160,6 @@ fun VideoItemCard(
                         .padding(horizontal = 16.dp)
                 )
             } else {
-                // YouTube Player - SIMPLE VERSION
                 val videoId = extractYouTubeVideoId(video.videoUrl)
 //val videoId = "VP212b8xDoQ"
                 if (videoId.isNotEmpty()) {
