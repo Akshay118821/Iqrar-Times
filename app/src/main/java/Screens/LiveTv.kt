@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +24,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.iqrarnewscompose.*
 import com.example.iqrarnewscompose.api.ApiNewsArticle
 import formatDisplayDate
+import kotlinx.coroutines.delay
 
 @Composable
 fun LiveTVScreen(
@@ -34,9 +34,11 @@ fun LiveTVScreen(
 
     var showLoader by remember { mutableStateOf(true) }
     var selectedItem by remember { mutableStateOf<ApiNewsArticle?>(null) }
+    var isUserSelected by remember { mutableStateOf(false) } // Track user selection
 
     val liveNews = remember { mutableStateListOf<ApiNewsArticle>() }
 
+    // ✅ Initial Load
     LaunchedEffect(lang) {
         showLoader = true
         val langParam = if (lang == "Hindi") "HINDI" else "ENGLISH"
@@ -45,8 +47,28 @@ fun LiveTVScreen(
             liveNews.clear()
             liveNews.addAll(viewModel.newsList)
 
-            selectedItem = liveNews.firstOrNull()   // ✅ default trending
+            if (!isUserSelected) {
+                selectedItem = liveNews.firstOrNull()
+            }
             showLoader = false
+        }
+    }
+
+    // ✅ Auto-refresh Logic (Updates Trending if user hasn't clicked anything)
+    LaunchedEffect(lang) {
+        while (true) {
+            delay(30_000L) // 30 Seconds refresh
+            val langParam = if (lang == "Hindi") "HINDI" else "ENGLISH"
+
+            viewModel.loadNews("84a69d51-4e22-4d76-b700-0d51aee23e37", langParam) {
+                liveNews.clear()
+                liveNews.addAll(viewModel.newsList)
+
+                // Only update big card automatically if user hasn't selected manually
+                if (!isUserSelected) {
+                    selectedItem = liveNews.firstOrNull()
+                }
+            }
         }
     }
 
@@ -64,7 +86,7 @@ fun LiveTVScreen(
             modifier = Modifier.padding(16.dp)
         )
 
-        // ✅ STATIC BIG CARD CONTAINER
+        // ✅ BIG CARD CONTAINER
         Card(
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier
@@ -83,30 +105,40 @@ fun LiveTVScreen(
                         item.video?.firstOrNull() ?: ""
                 }
 
-                if (videoUrl.isNotEmpty()) {
-
-                    // ✅ PLAYER INSIDE FIXED CARD
-                    VideoItemCard(
-                        video = VideoArticle(
-                            title = item.name ?: "",
-                            description = item.content ?: "",
-                            thumbUrl = item.icon ?: "",
-                            videoUrl = videoUrl,
-                            date = formatDisplayDate(item.date ?: ""),
-                            views = "1K"
-                        ),
-                        isPlaying = true,
-                        onPlayClick = {}
-                    )
-                } else {
-                    // fallback LIVE banner if no video
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            "LIVE STREAMING",
-                            color = Color.Red,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold
+                // Force recomposition when item changes
+                key(item.id) {
+                    if (videoUrl.isNotEmpty()) {
+                        // ✅ PLAY VIDEO
+                        VideoItemCard(
+                            video = VideoArticle(
+                                title = item.name ?: "",
+                                description = item.content ?: "",
+                                thumbUrl = item.icon ?: "",
+                                videoUrl = videoUrl,
+                                date = formatDisplayDate(item.date ?: ""),
+                                views = "1K"
+                            ),
+                            isPlaying = true,
+                            onPlayClick = {}
                         )
+                    } else {
+                        // ✅ CHANGE HERE: Show Image instead of "Live Streaming" text
+                        Box(contentAlignment = Alignment.Center) {
+                            Image(
+                                painter = rememberAsyncImagePainter(item.icon),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop, // Fill the card
+                                modifier = Modifier.fillMaxSize()
+                            )
+
+                            // Optional: Show a Play Icon overlay to look nice
+                            Icon(
+                                imageVector = Icons.Default.PlayCircleFilled,
+                                contentDescription = "Play",
+                                tint = Color.White.copy(alpha = 0.8f),
+                                modifier = Modifier.size(50.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -114,13 +146,14 @@ fun LiveTVScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ✅ Headline Section (Static Style)
+        // ✅ Headline Section
         selectedItem?.let {
             Column(Modifier.padding(horizontal = 16.dp)) {
                 Text(
                     it.name ?: "",
                     fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -143,17 +176,20 @@ fun LiveTVScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ✅ SMALL CARDS LIST (Scrollable)
+        // ✅ SMALL CARDS LIST
         LazyColumn {
 
-            items(liveNews) { item ->
+            items(liveNews, key = { it.id ?: it.hashCode() }) { item ->
 
                 if (item.id != selectedItem?.id) {
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { selectedItem = item }   // ✅ only update big card
+                            .clickable {
+                                selectedItem = item
+                                isUserSelected = true // User clicked, so stop auto-refresh override
+                            }
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -183,15 +219,17 @@ fun LiveTVScreen(
                             Text(
                                 item.name ?: "",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
+                                fontSize = 16.sp,
+                                maxLines = 2
                             )
                             Text(
                                 formatDisplayDate(item.date ?: ""),
                                 fontSize = 12.sp,
-                                color = TextGray
+                                color = Color.Gray
                             )
                         }
                     }
+                    Divider(color = Color.LightGray, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
 
@@ -203,43 +241,8 @@ fun LiveTVScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = BrandRed)
+                CircularProgressIndicator(color = Color.Red)
             }
-        }
-    }
-}
-
-@Composable
-fun FullScreenVideoPlayer(
-    videoUrl: String,
-    onClose: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-
-        VideoItemCard(
-            video = VideoArticle(
-                title = "",
-                description = "",
-                thumbUrl = "",
-                videoUrl = videoUrl,
-                date = "",
-                views = ""
-            ),
-            isPlaying = true,
-            onPlayClick = {}
-        )
-
-        IconButton(
-            onClick = onClose,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(16.dp)
-        ) {
-            Icon(Icons.Default.Close, contentDescription = null, tint = Color.White)
         }
     }
 }

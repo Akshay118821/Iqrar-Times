@@ -1,5 +1,7 @@
 package com.example.iqrarnewscompose
 
+import VideoArticle
+import VideoItemCard
 import VideosScreen
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -44,9 +46,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import coil.compose.rememberAsyncImagePainter
-import com.example.iqrarnewscompose.Screens.LiveTVScreen
 import com.example.iqrarnewscompose.ui.theme.IqrarNewsComposeTheme
+import kotlinx.coroutines.delay
 
+// Data Model
 data class NewsArticle(
     val title: String,
     val image: String,
@@ -61,21 +64,30 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
-        // ✅ Splashscreen (black/blank page cover avvadaniki)
+        // ✅ 1. Install Splash Screen (Must be first)
         val splashScreen = installSplashScreen()
 
         super.onCreate(savedInstanceState)
 
-        // ✅ App open avvagane API calls start cheyyi (Compose wait kakunda)
+        // ✅ 2. Pre-load Data Logic (Fix for Blank Screen)
         // Default language: Hindi
         viewModel.loadCategories("HINDI")
-        viewModel.loadNews("", "HINDI") { }
 
-        // ✅ Splash ni news vachhe varaku keep cheyyi (blank/loader badulu splash)
-        // ⚠️ Network fail ayithe splash stuck avvakunda 2500ms max wait
+        var isDataLoaded = false
+
+        // Start loading news immediately
+        viewModel.loadNews("", "HINDI") {
+            isDataLoaded = true
+        }
+
         val startTime = System.currentTimeMillis()
+
+        // ✅ 3. Keep Splash Screen until Data is Ready
         splashScreen.setKeepOnScreenCondition {
-            viewModel.newsList.isEmpty() && (System.currentTimeMillis() - startTime < 2500)
+            // Keep splash if data NOT loaded AND time is less than 3 seconds
+            // This prevents blank screen
+            val isTakingTooLong = (System.currentTimeMillis() - startTime) > 3000
+            (!isDataLoaded && !isTakingTooLong)
         }
 
         setContent {
@@ -91,6 +103,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// Colors & Fonts
 val BrandRed = Color(0xFFD32F2F)
 val TextBlack = Color(0xFF1A1A1A)
 val TextGray = Color(0xFF666666)
@@ -536,152 +549,237 @@ data class LiveItem(
     val metaHi: String
 )
 
-private val liveItems = listOf(
-    LiveItem("https://i.ibb.co/b155FKJ/black-thumb.png", "Breaking: New Climate Report", "ब्रेकिंग: नई जलवायु रिपोर्ट", "1h ago · 10 min read", "1 घंटा पहले · 10 मिनट"),
-    LiveItem("https://i.ibb.co/NFxqXqK/muslim-news-thumb.png", "Tech Giants Face Antitrust", "टेक दिग्गजों को एंटीट्रस्ट का सामना", "2h ago · 15 min read", "2 घंटे पहले · 15 मिनट"),
-    LiveItem("https://i.ibb.co/tPKyd1P/breaking-news-thumb.png", "Local Elections: Key Races", "स्थानीय चुनाव: मुख्य मुकाबले", "3h ago · 8 min read", "3 घंटे पहले · 8 मिनट")
-)
-
 @Composable
 fun LiveTVScreen(
     lang: String,
-    viewModel: com.example.iqrarnewscompose.NewsViewModel
+    viewModel: NewsViewModel
 ) {
 
+    // ✅ State Variables
     var showLoader by remember { mutableStateOf(true) }
+    var selectedItem by remember { mutableStateOf<com.example.iqrarnewscompose.api.ApiNewsArticle?>(null) }
+    var isUserSelected by remember { mutableStateOf(false) } // Track if user clicked manually
+
+    // Data list
     val liveNews = remember { mutableStateListOf<com.example.iqrarnewscompose.api.ApiNewsArticle>() }
 
+    // ✅ 1. Initial Load Logic (Handles Language Change & Loader)
     LaunchedEffect(lang) {
-        showLoader = true
+        showLoader = true // 🔥 Start Loader
+        liveNews.clear()  // Clear old data immediately
+        selectedItem = null
+        isUserSelected = false
 
         val langParam = if (lang == "Hindi") "HINDI" else "ENGLISH"
 
+        // Load specific Live TV Category ID (Use your actual Category ID here)
         viewModel.loadNews("84a69d51-4e22-4d76-b700-0d51aee23e37", langParam) {
             liveNews.clear()
             liveNews.addAll(viewModel.newsList)
-            showLoader = false
+
+            // Set first item as default playing
+            if (liveNews.isNotEmpty()) {
+                selectedItem = liveNews.first()
+            }
+            showLoader = false // 🔥 Stop Loader only when data arrives
         }
     }
 
-    LazyColumn(
+    // ✅ 2. Auto-Refresh Logic (Runs every 30 seconds)
+    LaunchedEffect(lang) {
+        while (true) {
+            delay(30_000L) // Wait 30 Seconds
+            val langParam = if (lang == "Hindi") "HINDI" else "ENGLISH"
+
+            viewModel.loadNews("84a69d51-4e22-4d76-b700-0d51aee23e37", langParam) {
+                liveNews.clear()
+                liveNews.addAll(viewModel.newsList)
+
+                // Only update the Big Card automatically if the USER HAS NOT CLICKED anything
+                if (!isUserSelected && liveNews.isNotEmpty()) {
+                    selectedItem = liveNews.first()
+                }
+            }
+        }
+    }
+
+    // ✅ MAIN UI
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(Color(0xFFF2F2F2)) // Light Gray Background
     ) {
 
-        item {
-            Text(
-                if (lang == "Hindi") "लाइव न्यूज़" else "Live News",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = TextBlack,
-                modifier = Modifier.padding(16.dp)
+        if (showLoader) {
+            // 🌀 LOADER STATE: Only Circular Loader, NO TEXT
+            CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.Center),
+                color = BrandRed
             )
-        }
+        } else {
+            // 📰 CONTENT STATE
+            Column(modifier = Modifier.fillMaxSize()) {
 
-        items(liveNews) { item ->
+                // Title
+                Text(
+                    text = if (lang == "Hindi") "लाइव न्यूज़" else "Live News",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextBlack,
+                    modifier = Modifier.padding(16.dp)
+                )
 
-            val videoUrl = when {
-                !item.youtube_url.isNullOrEmpty() && item.youtube_url.first().isNotEmpty() ->
-                    item.youtube_url.first()
-
-                else ->
-                    item.video?.firstOrNull() ?: ""
-            }
-
-            if (videoUrl.isNotEmpty()) {
-                Row(
+                // 📺 BIG CARD (Video Player or Image)
+                Card(
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .height(220.dp)
+                        .padding(horizontal = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Black)
                 ) {
+                    selectedItem?.let { item ->
 
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.size(90.dp, 70.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF111111))
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Image(
-                                rememberAsyncImagePainter(item.icon),
-                                null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            Icon(
-                                Icons.Default.PlayCircleFilled,
-                                null,
-                                tint = Color.Red,
-                                modifier = Modifier.size(26.dp)
-                            )
+                        // Check for YouTube URL or Video URL
+                        val videoUrl = when {
+                            !item.youtube_url.isNullOrEmpty() && item.youtube_url.first().isNotEmpty() ->
+                                item.youtube_url.first()
+                            else -> item.video?.firstOrNull() ?: ""
+                        }
+
+                        // Force recomposition when item changes
+                        key(item.id) {
+                            if (videoUrl.isNotEmpty()) {
+                                // ▶️ SHOW VIDEO PLAYER
+                                VideoItemCard(
+                                    video = VideoArticle(
+                                        title = item.name ?: "",
+                                        description = item.content ?: "",
+                                        thumbUrl = item.icon ?: "",
+                                        videoUrl = videoUrl,
+                                        date = formatDate(item.date ?: ""),
+                                        views = "1K"
+                                    ),
+                                    isPlaying = true,
+                                    onPlayClick = {}
+                                )
+                            } else {
+                                // 🖼️ SHOW IMAGE FALLBACK (No Text)
+                                Box(contentAlignment = Alignment.Center) {
+                                    Image(
+                                        painter = rememberAsyncImagePainter(item.icon),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    // Overlay Play Button
+                                    Icon(
+                                        imageVector = Icons.Default.PlayCircleFilled,
+                                        contentDescription = null,
+                                        tint = Color.White.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(50.dp)
+                                    )
+                                }
+                            }
                         }
                     }
+                }
 
-                    Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
+                // 📝 HEADLINE (For Big Card)
+                selectedItem?.let {
+                    Column(Modifier.padding(horizontal = 16.dp)) {
                         Text(
-                            item.name ?: "",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = it.name ?: "",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
                             color = TextBlack,
                             maxLines = 2
                         )
-                        Text(
-                            item.date ?: "",
-                            fontSize = 12.sp,
-                            color = TextGray
-                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Watch Live", color = BrandRed, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(BrandRed, RoundedCornerShape(50))
+                            )
+                        }
                     }
                 }
-            }
-        }
 
-        if (showLoader) {
-            item {
-                Box(
-                    modifier = Modifier.fillParentMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // loader UI intentionally empty
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 📜 SMALL CARDS LIST (Scrollable)
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(liveNews) { item ->
+                        // Don't show the currently playing item in the list below
+                        if (item.id != selectedItem?.id) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        // Update Big Card & Stop Auto-Refresh Override
+                                        selectedItem = item
+                                        isUserSelected = true
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Thumbnail
+                                Card(
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.size(100.dp, 70.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.LightGray)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Image(
+                                            painter = rememberAsyncImagePainter(item.icon),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Default.PlayCircleFilled,
+                                            contentDescription = null,
+                                            tint = BrandRed
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                // Text Info
+                                Column {
+                                    Text(
+                                        text = item.name ?: "",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = TextBlack,
+                                        maxLines = 2,
+                                        lineHeight = 18.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = formatDate(item.date ?: ""),
+                                        fontSize = 12.sp,
+                                        color = TextGray
+                                    )
+                                }
+                            }
+                            // Divider
+                            Divider(
+                                color = Color.LightGray,
+                                thickness = 0.5.dp,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+                    item { Spacer(modifier = Modifier.height(20.dp)) }
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun LiveListItem(item: LiveItem, lang: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.size(90.dp, 70.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF111111))
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Image(
-                    rememberAsyncImagePainter(item.thumbUrl),
-                    null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-                Icon(Icons.Default.PlayCircleFilled, null, tint = Color.Red, modifier = Modifier.size(26.dp))
-            }
-        }
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                if (lang == "Hindi") item.titleHi else item.titleEn,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextBlack,
-                maxLines = 2
-            )
-            Text(if (lang == "Hindi") item.metaHi else item.metaEn, fontSize = 12.sp, color = TextGray)
         }
     }
 }
@@ -727,14 +825,13 @@ fun HomeScreen(
     categories: List<CategoryItem>,
     viewModel: NewsViewModel
 ) {
+    // Local loader state
     var showLoader by remember { mutableStateOf(true) }
 
     LaunchedEffect(lang) {
         showLoader = true
         val langParam = if (lang == "Hindi") "HINDI" else "ENGLISH"
-        val categoryId = ""
-
-        viewModel.loadNews(categoryId, langParam) {
+        viewModel.loadNews("", langParam) {
             showLoader = false
         }
     }
@@ -744,30 +841,17 @@ fun HomeScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
 
-        // ✅ blank page avoid (loader remove chesina kuda empty Box pettakudadhu)
+        // ✅ CHANGE: List empty unte Text kaadhu, ONLY LOADER vastundi
         if (newsList.isEmpty()) {
-            Column(
-                modifier = Modifier.fillMaxSize().background(Color.White),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.logo),
-                    contentDescription = "Logo",
-                    modifier = Modifier.height(38.dp).width(180.dp),
-                    contentScale = ContentScale.Fit
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = if (lang == "Hindi") "समाचार लोड हो रहा है..." else "Loading news...",
-                    color = TextGray,
-                    fontSize = 13.sp
-                )
+                CircularProgressIndicator(color = BrandRed)
             }
         } else {
+            // Data vachaka List chupistundi
             LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
-
-                val fTitle = if (lang == "Hindi") "इरफान पठान ने रोहित पर सच बोला..." else "Irfan Pathan Drops Truth Bomb..."
 
                 item {
                     DynamicCategorySection(
@@ -889,18 +973,13 @@ fun CategoryNewsScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
 
+        // ✅ CHANGE: Only Loader if list is empty
         if (list.isEmpty()) {
-            // ✅ blank avoid
-            Column(
-                modifier = Modifier.fillMaxSize().background(Color.White),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = if (lang == "Hindi") "समाचार लोड हो रहा है..." else "Loading news...",
-                    color = TextGray,
-                    fontSize = 13.sp
-                )
+                CircularProgressIndicator(color = BrandRed)
             }
         } else {
             LazyColumn(
@@ -939,60 +1018,6 @@ fun CategoryNewsScreen(
                 }
             }
         }
-
-        if (showLoader) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                // loader UI intentionally empty
-            }
-        }
-    }
-}
-
-@Composable
-fun VideoNewsCard(lang: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-            .clickable { }
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-            ) {
-                Image(
-                    rememberAsyncImagePainter("https://cdn.britannica.com/48/252748-050-C514EFDB/Virat-Kohli-India-celebrates-50th-century-Cricket-November-15-2023.jpg"),
-                    null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-
-            Icon(
-                Icons.Default.PlayCircleFilled,
-                null,
-                tint = Color.Red,
-                modifier = Modifier.size(60.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = if (lang == "Hindi")
-                "ब्रेकिंग न्यूज़ वीडियो अपडेट"
-            else
-                "Breaking News Video Update",
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp,
-            color = TextBlack
-        )
     }
 }
 
@@ -1006,119 +1031,59 @@ fun DynamicCategorySection(
         .filter { it.parent_id == "0" || it.parent_id == null }
         .sortedBy { it.priority ?: 0 }
 
-    val allCategories = listOf("Home" to "होम") +
+
+    val allCategories = listOf("Home" to "Home") +
             parentCategories.map { it.id to it.name }
 
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         items(allCategories) { pair ->
             val id = pair.first
             val name = pair.second
+            val isSelected = selected.equals(id, true)
+            val contentColor = if (isSelected) BrandRed else TextBlack
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .padding(end = 24.dp)
-                    .clickable {
-                        onClick(id.toString())
-                    }
+                    .clickable { onClick(id.toString()) }
             ) {
-                Text(
-                    text = name,
-                    color = if (selected.equals(id, true)) BrandRed else TextBlack,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
 
-                if (selected.equals(id, true)) {
+                // 🔥 LOGIC CHANGE: Home ayithe Image, ledante Text
+                if (id == "Home") {
+                    Image(
+                        // ⚠️ NOTE: Make sure 'ic_home_red' exists in drawable
+                        painter = painterResource(id = R.drawable.ic_home_red),
+                        contentDescription = "Home",
+                        modifier = Modifier
+                            .size(24.dp)
+                            .padding(bottom = 2.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Text(
+                        text = name ?: "",
+                        color = contentColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                }
+
+                // Red Underline Indicator
+                if (isSelected) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Box(
                         modifier = Modifier
                             .width(30.dp)
                             .height(3.dp)
-                            .background(BrandRed)
+                            .background(BrandRed, RoundedCornerShape(2.dp))
                     )
+                } else {
+                    Spacer(modifier = Modifier.height(7.dp))
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun VideoNewsCardDynamic(img: String, title: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-            ) {
-                Image(
-                    rememberAsyncImagePainter(img),
-                    null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-
-            Icon(
-                Icons.Default.PlayCircleFilled,
-                null,
-                tint = Color.Red,
-                modifier = Modifier.size(60.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = title,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp,
-            color = TextBlack
-        )
-    }
-}
-
-@Composable
-fun CategorySection(sel: String, lang: String, onClick: (String) -> Unit) {
-    val cats = listOf("Home", "World", "Entertainment", "Politics", "Business", "Sports", "Technology")
-    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
-        items(cats) { c ->
-            val disp = if (lang == "Hindi") {
-                when (c) {
-                    "Home" -> "होम"
-                    "World" -> "विश्व"
-                    "Entertainment" -> "मनोरंजन"
-                    "Politics" -> "राजनीति"
-                    "Business" -> "व्यापार"
-                    "Sports" -> "खेल"
-                    "Technology" -> "तकनीकी"
-                    else -> c
-                }
-            } else c
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(end = 24.dp).clickable { onClick(c) }
-            ) {
-                Text(
-                    disp,
-                    color = if (c == sel) BrandRed else TextBlack,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
-                if (c == sel) Box(
-                    modifier = Modifier
-                        .width(30.dp)
-                        .height(3.dp)
-                        .background(BrandRed, RoundedCornerShape(2.dp))
-                )
             }
         }
     }
@@ -1133,27 +1098,6 @@ fun FeaturedNewsCard(img: String, tit: String, meta: String, onClick: () -> Unit
         Spacer(modifier = Modifier.height(12.dp))
         Text(tit, color = TextBlack, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text(formatDate(meta), color = TextGray, fontSize = 12.sp)
-
-        fun formatDate(input: String): String {
-            return try {
-                val parser = java.text.SimpleDateFormat(
-                    "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
-                    java.util.Locale.getDefault()
-                )
-                parser.timeZone = java.util.TimeZone.getTimeZone("UTC")
-
-                val date = parser.parse(input)
-
-                val output = java.text.SimpleDateFormat(
-                    "dd MMM yyyy  h:mm a",
-                    java.util.Locale.getDefault()
-                )
-
-                output.format(date!!)
-            } catch (e: Exception) {
-                input
-            }
-        }
     }
 }
 
