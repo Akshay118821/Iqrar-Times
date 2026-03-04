@@ -25,9 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -37,13 +35,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -60,6 +56,10 @@ import com.example.iqrarnewscompose.api.VerifyOtpRequest
 import com.example.iqrarnewscompose.ui.theme.IqrarNewsComposeTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.material.icons.filled.PlayCircleFilled
+import com.example.iqrarnewscompose.profile.ProfileMenuView
 
 // Data Model
 data class NewsArticle(
@@ -120,21 +120,25 @@ val TextBlack = Color(0xFF1A1A1A)
 val TextGray = Color(0xFF666666)
 val NotoSansFont = FontFamily.SansSerif
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainApp(viewModel: NewsViewModel) {
 
-    // --- DRAWER & AUTH STATES ---
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    // authStep: 0 = Normal App, 1 = Login Screen, 2 = OTP Screen
     var authStep by remember { mutableStateOf(0) }
 
-    // ✅ Store email for OTP verification
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+
+    var isLoggedIn by remember {
+        mutableStateOf(prefs.getBoolean("isLoggedIn", false))
+    }
+
     var userEmail by remember { mutableStateOf("") }
 
-    // Handle Back Press for Auth Screens
     BackHandler(enabled = authStep > 0 || drawerState.isOpen) {
         if (drawerState.isOpen) {
             scope.launch { drawerState.close() }
@@ -152,10 +156,24 @@ fun MainApp(viewModel: NewsViewModel) {
                 drawerContainerColor = Color.White,
                 modifier = Modifier.width(300.dp)
             ) {
+
                 SideMenuDrawer(
+
+                    isLoggedIn = isLoggedIn,
+
                     onLoginClick = {
                         scope.launch { drawerState.close() }
                         authStep = 1
+                    },
+
+                    onLogoutClick = {
+
+                        // clear login
+                        prefs.edit().putBoolean("isLoggedIn", false).apply()
+                        isLoggedIn = false
+
+                        // close drawer
+                        scope.launch { drawerState.close() }
                     }
                 )
             }
@@ -164,26 +182,25 @@ fun MainApp(viewModel: NewsViewModel) {
 
         Box(modifier = Modifier.fillMaxSize()) {
 
-            // Normal App Content
             MainContent(
                 viewModel = viewModel,
                 onOpenDrawer = {
                     scope.launch { drawerState.open() }
+                },
+                openLogin = {
+                    authStep = 1
                 }
             )
 
-            // ----------------------------
             // LOGIN SCREEN
-            // ----------------------------
             if (authStep == 1) {
 
                 LoginScreen(
 
-                    // email receive from LoginScreen
                     onGetOtpClick = { email ->
 
-                        userEmail = email   // store email
-                        authStep = 2        // move to OTP screen
+                        userEmail = email
+                        authStep = 2
 
                     },
 
@@ -194,27 +211,25 @@ fun MainApp(viewModel: NewsViewModel) {
                 )
             }
 
-            // ----------------------------
             // OTP SCREEN
-            // ----------------------------
             if (authStep == 2) {
 
                 OtpScreen(
 
-                    email = userEmail,   // pass email here
+                    email = userEmail,
 
                     onVerifyClick = {
 
-                        authStep = 0   // login success → go home
+                        // login success
+                        isLoggedIn = true
+                        prefs.edit().putBoolean("isLoggedIn", true).apply()
 
+                        authStep = 0
                     },
 
                     onBackClick = {
-
-                        authStep = 1   // back to login
-
+                        authStep = 1
                     }
-
                 )
             }
         }
@@ -224,7 +239,8 @@ fun MainApp(viewModel: NewsViewModel) {
 @Composable
 fun MainContent(
     viewModel: NewsViewModel,
-    onOpenDrawer: () -> Unit
+    onOpenDrawer: () -> Unit,
+    openLogin: () -> Unit
 ) {
     var selectedScreen by remember { mutableStateOf("Home") }
     var currentLanguage by remember { mutableStateOf("Hindi") }
@@ -393,6 +409,7 @@ fun MainContent(
             if (selectedArticle != null) {
                 NewsDetailScreen(article = selectedArticle!!)
             } else {
+                val isLoggedIn = null
                 when (selectedScreen) {
 
                     "Home" -> HomeScreen(
@@ -403,7 +420,13 @@ fun MainContent(
                         viewModel = viewModel
                     )
 
-                    "Profile" -> ProfileScreen(currentLanguage, onHeaderVisibilityChange = { isMainHeaderVisible = it })
+                    "Profile" -> ProfileScreen(
+                        lang = currentLanguage,
+                        isLoggedIn = isLoggedIn == true,
+                        onHeaderVisibilityChange = { isMainHeaderVisible = it },
+                        openLogin = { openLogin() }
+                    )
+
                     "Live TV" -> LiveTVScreen(currentLanguage, viewModel)
                     "E-Paper" -> EPaperScreen("https://www.iqrartimes.com/epaper/delhi?page=1")
                     "Videos" -> VideosScreen(currentLanguage, viewModel)
@@ -427,7 +450,11 @@ fun MainContent(
 // ------------------------------------------------------------
 
 @Composable
-fun SideMenuDrawer(onLoginClick: () -> Unit) {
+fun SideMenuDrawer(
+    isLoggedIn: Boolean,
+    onLoginClick: () -> Unit,
+    onLogoutClick: () -> Unit
+){
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -494,14 +521,25 @@ fun SideMenuDrawer(onLoginClick: () -> Unit) {
 
         // --- Login Button ---
         Button(
-            onClick = onLoginClick,
+            onClick = {
+                if (isLoggedIn) {
+                    onLogoutClick()
+                } else {
+                    onLoginClick()
+                }
+            },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF2424)), // Red Color
             shape = RoundedCornerShape(8.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
         ) {
-            Text(text = "Login", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = if (isLoggedIn) "Logout" else "Login",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
@@ -691,9 +729,14 @@ fun OtpScreen(
 
     var otp by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+
     val scope = rememberCoroutineScope()
 
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+
     Box(modifier = Modifier.fillMaxSize()) {
+
         Column(modifier = Modifier.fillMaxSize()) {
 
             // RED TOP AREA
@@ -782,11 +825,16 @@ fun OtpScreen(
                                         )
 
                                     if (response.isSuccessful) {
+
+                                        // Save login status
+                                        prefs.edit()
+                                            .putBoolean("isLoggedIn", true)
+                                            .apply()
+
                                         onVerifyClick()
                                     }
 
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
+                                } catch (_: Exception) {
                                 }
 
                                 isLoading = false
@@ -811,25 +859,23 @@ fun OtpScreen(
                         } else {
 
                             Text(
-                                "Verify",
+                                text = "Verify",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
                             )
-
                         }
-
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
 
                     Text(
-                        "Resend code",
+                        text = "Resend code",
                         color = TextGray,
                         fontSize = 12.sp
                     )
 
                     Text(
-                        "Change email address",
+                        text = "Change email address",
                         color = TextGray,
                         fontSize = 12.sp,
                         modifier = Modifier
@@ -887,12 +933,22 @@ fun NewsDetailScreen(article: NewsArticle) {
                 color = TextBlack
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
+            val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+            val isLoggedIn = prefs.getBoolean("isLoggedIn", false)
+
+            // 🔴 ACTION ROW (Share + Bookmark + Comment)
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                // SHARE
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable {
 
                         val cleanContent = android.text.Html
                             .fromHtml(article.content, android.text.Html.FROM_HTML_MODE_LEGACY)
@@ -908,17 +964,107 @@ fun NewsDetailScreen(article: NewsArticle) {
                             Intent.createChooser(intent, "Share via")
                         )
                     }
-            ) {
-                Icon(Icons.Default.Share, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Share", color = BrandRed)
+                ) {
+
+                    Icon(
+                        Icons.Default.Share,
+                        contentDescription = null,
+                        tint = BrandRed
+                    )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Text(
+                        "Share",
+                        color = BrandRed,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                // BOOKMARK
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable {
+
+                        Toast.makeText(
+                            context,
+                            "Article Bookmarked",
+                            Toast.LENGTH_SHORT
+                        ).show()
+
+                    }
+                ) {
+
+                    Icon(
+                        Icons.Default.BookmarkBorder,
+                        contentDescription = null,
+                        tint = BrandRed
+                    )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Text(
+                        "Bookmark",
+                        color = BrandRed,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                // COMMENT
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable {
+
+                        if (!isLoggedIn) {
+
+                            Toast.makeText(
+                                context,
+                                "Please login to comment",
+                                Toast.LENGTH_SHORT
+                            ).show()
+
+                        } else {
+
+                            Toast.makeText(
+                                context,
+                                "Open comment box",
+                                Toast.LENGTH_SHORT
+                            ).show()
+
+                        }
+
+                    }
+                ) {
+
+                    Icon(
+                        Icons.Default.Comment,
+                        contentDescription = null,
+                        tint = BrandRed
+                    )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Text(
+                        "Comment",
+                        color = BrandRed,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
             }
+
         }
     }
 }
 
 @Composable
-fun ProfileScreen(lang: String, onHeaderVisibilityChange: (Boolean) -> Unit) {
+fun ProfileScreen(
+    lang: String,
+    isLoggedIn: Boolean,
+    onHeaderVisibilityChange: (Boolean) -> Unit,
+    openLogin: () -> Unit
+)
+{
     val context = LocalContext.current
     var localView by remember { mutableStateOf("Main") }
 
@@ -928,82 +1074,133 @@ fun ProfileScreen(lang: String, onHeaderVisibilityChange: (Boolean) -> Unit) {
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
+
         when (localView) {
+
             "Main" -> {
-                LaunchedEffect(Unit) { onHeaderVisibilityChange(true) }
-                ProfileMenuView(
-                    lang = lang,
-                    onNavigate = {
-                        localView = it
-                        onHeaderVisibilityChange(false)
-                    },
-                    onContactClick = {
-                        val intent = Intent(Intent.ACTION_SENDTO).apply {
-                            data = Uri.parse("mailto:contact@iqrartimes.com")
+
+                LaunchedEffect(Unit) {
+                    onHeaderVisibilityChange(true)
+                }
+
+                if (isLoggedIn) {
+
+                    // LOGIN AYINA TARUVATHA PROFILE UI
+                    LoggedInProfileUI(
+                        onLogout = {
+
+                            val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+
+                            prefs.edit()
+                                .putBoolean("isLoggedIn", false)
+                                .apply()
+
                         }
-                        try {
+                    )
+
+                } else {
+
+                    // LOGIN KAAPOTHE SIGNIN UI
+                    ProfileMenuView(
+                        onNavigate = {
+                            localView = it
+                            onHeaderVisibilityChange(false)
+                        },
+                        onContactClick = {
+                            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                data = Uri.parse("mailto:contact@iqrartimes.com")
+                            }
                             context.startActivity(intent)
-                        } catch (e: Exception) {
                         }
-                    }
-                )
+                    ) { openLogin() }
+
+                }
             }
 
             "Terms" -> LocalWebViewScreen(
                 title = if (lang == "Hindi") "टर्म्स एंड कंडीशंस" else "Terms & Conditions",
                 url = "https://www.iqrartimes.com/terms-of-service",
-                onBack = { localView = "Main"; onHeaderVisibilityChange(true) }
+                onBack = {
+                    localView = "Main"
+                    onHeaderVisibilityChange(true)
+                }
             )
 
             "Privacy" -> LocalWebViewScreen(
                 title = if (lang == "Hindi") "प्राइवेसी पॉलिसी" else "Privacy Policy",
                 url = "https://www.iqrartimes.com/privacy-policy",
-                onBack = { localView = "Main"; onHeaderVisibilityChange(true) }
+                onBack = {
+                    localView = "Main"
+                    onHeaderVisibilityChange(true)
+                }
             )
         }
     }
 }
 
 @Composable
-fun ProfileMenuView(lang: String, onNavigate: (String) -> Unit, onContactClick: () -> Unit) {
+fun LoggedInProfileUI(onLogout: () -> Unit) {
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(30.dp))
-        Button(
-            onClick = { },
-            colors = ButtonDefaults.buttonColors(containerColor = BrandRed),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.width(220.dp).height(48.dp)
-        ) {
-            Text(
-                if (lang == "Hindi") "साइन इन / साइन अप" else "SIGN IN / SIGN UP",
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = if (lang == "Hindi") "साइन इन टू एक्सेस योर सेव็ड आर्टिकल्स" else "Sign in to access your saved articles.",
-            textAlign = TextAlign.Center,
-            color = TextBlack,
-            fontSize = 14.sp
+
+        Spacer(modifier = Modifier.height(40.dp))
+
+        Image(
+            painter = painterResource(id = R.drawable.ic_profile),
+            contentDescription = null,
+            modifier = Modifier.size(120.dp)
         )
-        Spacer(modifier = Modifier.height(35.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ProfileGridItem(Icons.Default.Language, if (lang == "Hindi") "लैंग्वेज" else "Language", Modifier.weight(1f))
-            ProfileGridItem(Icons.Default.Notifications, if (lang == "Hindi") "नोटिफिकेशन" else "Notifications", Modifier.weight(1f))
-        }
+
         Spacer(modifier = Modifier.height(12.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ProfileGridItem(Icons.Default.Settings, if (lang == "Hindi") "प्रेफरेंस" else "Preferences", Modifier.weight(1f))
-            ProfileGridItem(Icons.Default.Info, if (lang == "Hindi") "बारे में" else "About", Modifier.weight(1f))
-        }
+
+        Text(
+            text = "Kalyan Kumar",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Text(
+            text = "Edit Profile",
+            color = BrandRed
+        )
+
         Spacer(modifier = Modifier.height(30.dp))
-        ProfileListTile(Icons.Default.Security, if (lang == "Hindi") "प्राइवेसी पॉलिसी" else "Privacy Policy") { onNavigate("Privacy") }
-        ProfileListTile(Icons.Default.Description, if (lang == "Hindi") "टर्म्स एंड कंडीशंस" else "Terms & Conditions") { onNavigate("Terms") }
-        ProfileListTile(Icons.Default.Email, if (lang == "Hindi") "कॉन्टैक्टें" else "Contact") { onContactClick() }
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+
+            ProfileGridItem(Icons.Default.Language,"Language",Modifier.weight(1f))
+
+            ProfileGridItem(Icons.Default.Notifications,"Notifications",Modifier.weight(1f))
+
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+
+            ProfileGridItem(Icons.Default.Settings,"Preferences",Modifier.weight(1f))
+
+            ProfileGridItem(Icons.Default.Info,"About",Modifier.weight(1f))
+
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        ProfileListTile(Icons.Default.Security,"Privacy Policy"){}
+
+        ProfileListTile(Icons.Default.Description,"Terms & Conditions"){}
+
+        ProfileListTile(Icons.Default.Email,"Contact"){}
+
+        ProfileListTile(Icons.Default.Logout,"Log Out") {
+            onLogout()
+        }
+
     }
 }
 
@@ -1805,3 +2002,4 @@ fun IqrarBottomBar(sel: String, lang: String, onNavigate: (String) -> Unit) {
         }
     }
 }
+//changes applied in this codes
