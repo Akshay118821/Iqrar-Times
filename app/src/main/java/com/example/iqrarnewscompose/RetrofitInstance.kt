@@ -7,29 +7,36 @@ import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
 import com.example.iqrarnewscompose.BuildConfig
 
-// INDHULO 'interface ApiService' UNDAKUDADU. ONLY OBJECT UNDALI.
-
 object RetrofitInstance {
 
     private const val BASE_URL = BuildConfig.BASE_URL
 
-    private val client by lazy {
-        val logging = HttpLoggingInterceptor()
-        logging.setLevel(HttpLoggingInterceptor.Level.BODY)
+    // Logging interceptor
+    private val loggingInterceptor by lazy {
+        HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
+    }
 
+    // OkHttp Client
+    private val client by lazy {
         OkHttpClient.Builder()
-            .addInterceptor(logging)
+            .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
             .build()
     }
 
+    // Retrofit instance
     val api: ApiService by lazy {
+
         Retrofit.Builder()
             .baseUrl(BASE_URL)
             .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(ApiService::class.java)
+
     }
 }

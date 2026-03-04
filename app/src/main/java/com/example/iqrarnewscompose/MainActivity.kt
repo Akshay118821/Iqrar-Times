@@ -18,27 +18,35 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,8 +54,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import coil.compose.rememberAsyncImagePainter
+import com.example.iqrarnewscompose.api.RetrofitInstance
+import com.example.iqrarnewscompose.api.SendOtpRequest
+import com.example.iqrarnewscompose.api.VerifyOtpRequest
 import com.example.iqrarnewscompose.ui.theme.IqrarNewsComposeTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // Data Model
 data class NewsArticle(
@@ -85,7 +97,6 @@ class MainActivity : ComponentActivity() {
         // ✅ 3. Keep Splash Screen until Data is Ready
         splashScreen.setKeepOnScreenCondition {
             // Keep splash if data NOT loaded AND time is less than 3 seconds
-            // This prevents blank screen
             val isTakingTooLong = (System.currentTimeMillis() - startTime) > 3000
             (!isDataLoaded && !isTakingTooLong)
         }
@@ -113,6 +124,108 @@ val NotoSansFont = FontFamily.SansSerif
 @Composable
 fun MainApp(viewModel: NewsViewModel) {
 
+    // --- DRAWER & AUTH STATES ---
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    // authStep: 0 = Normal App, 1 = Login Screen, 2 = OTP Screen
+    var authStep by remember { mutableStateOf(0) }
+
+    // ✅ Store email for OTP verification
+    var userEmail by remember { mutableStateOf("") }
+
+    // Handle Back Press for Auth Screens
+    BackHandler(enabled = authStep > 0 || drawerState.isOpen) {
+        if (drawerState.isOpen) {
+            scope.launch { drawerState.close() }
+        } else if (authStep == 2) {
+            authStep = 1
+        } else if (authStep == 1) {
+            authStep = 0
+        }
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = Color.White,
+                modifier = Modifier.width(300.dp)
+            ) {
+                SideMenuDrawer(
+                    onLoginClick = {
+                        scope.launch { drawerState.close() }
+                        authStep = 1
+                    }
+                )
+            }
+        }
+    ) {
+
+        Box(modifier = Modifier.fillMaxSize()) {
+
+            // Normal App Content
+            MainContent(
+                viewModel = viewModel,
+                onOpenDrawer = {
+                    scope.launch { drawerState.open() }
+                }
+            )
+
+            // ----------------------------
+            // LOGIN SCREEN
+            // ----------------------------
+            if (authStep == 1) {
+
+                LoginScreen(
+
+                    // email receive from LoginScreen
+                    onGetOtpClick = { email ->
+
+                        userEmail = email   // store email
+                        authStep = 2        // move to OTP screen
+
+                    },
+
+                    onBackClick = {
+                        authStep = 0
+                    }
+
+                )
+            }
+
+            // ----------------------------
+            // OTP SCREEN
+            // ----------------------------
+            if (authStep == 2) {
+
+                OtpScreen(
+
+                    email = userEmail,   // pass email here
+
+                    onVerifyClick = {
+
+                        authStep = 0   // login success → go home
+
+                    },
+
+                    onBackClick = {
+
+                        authStep = 1   // back to login
+
+                    }
+
+                )
+            }
+        }
+    }
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MainContent(
+    viewModel: NewsViewModel,
+    onOpenDrawer: () -> Unit
+) {
     var selectedScreen by remember { mutableStateOf("Home") }
     var currentLanguage by remember { mutableStateOf("Hindi") }
 
@@ -210,7 +323,10 @@ fun MainApp(viewModel: NewsViewModel) {
                                 Icon(Icons.Default.ArrowBack, null, tint = Color.White)
                             }
                         } else {
-                            IconButton(onClick = {}) { Icon(Icons.Default.Menu, null, tint = Color.White) }
+                            // ✅ DRAWER OPEN ACTION LINKED HERE
+                            IconButton(onClick = { onOpenDrawer() }) {
+                                Icon(Icons.Default.Menu, null, tint = Color.White)
+                            }
                         }
                     },
                     actions = {
@@ -305,6 +421,431 @@ fun MainApp(viewModel: NewsViewModel) {
         }
     }
 }
+
+// ------------------------------------------------------------
+// ✅ NEW COMPOSABLES: Drawer, Login Screen, OTP Screen
+// ------------------------------------------------------------
+
+@Composable
+fun SideMenuDrawer(onLoginClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+            .padding(top = 20.dp)
+    ) {
+        // --- Header Title ---
+        Text(
+            text = "Sign in to your account",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black,
+            modifier = Modifier.padding(bottom = 30.dp)
+        )
+
+        // --- Menu Items ---
+
+        // 1. Language Item
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Language, contentDescription = null, tint = Color.Black)
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(text = "Language", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextBlack)
+            }
+            Box(
+                modifier = Modifier
+                    .border(1.dp, Color.LightGray, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("English", fontSize = 12.sp, color = TextBlack)
+                    Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(16.dp), tint = TextBlack)
+                }
+            }
+        }
+
+        // 2. Settings
+        DrawerMenuItem(icon = Icons.Outlined.Settings, text = "Settings")
+
+        // 3. Privacy Policy
+        DrawerMenuItem(icon = Icons.Outlined.Security, text = "Privacy Policy")
+
+        // 4. Terms & Conditions
+        DrawerMenuItem(icon = Icons.Outlined.Description, text = "Terms & Conditions")
+
+        // 5. Contact Us
+        DrawerMenuItem(icon = Icons.Outlined.HelpOutline, text = "Contact Us")
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // --- Version Info ---
+        Text(
+            text = "Version 1.2.4",
+            color = Color.Gray,
+            fontSize = 14.sp,
+            modifier = Modifier.padding(vertical = 16.dp)
+        )
+
+        // --- Login Button ---
+        Button(
+            onClick = onLoginClick,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF2424)), // Red Color
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+        ) {
+            Text(text = "Login", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun DrawerMenuItem(icon: ImageVector, text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp)
+            .clickable { /* Handle Click */ },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(imageVector = icon, contentDescription = text, tint = Color.Black)
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(text = text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextBlack)
+    }
+}
+
+// --- SCREEN 1: LOGIN (Image 3) ---
+@Composable
+fun LoginScreen(
+    onGetOtpClick: (String) -> Unit,
+    onBackClick: () -> Unit
+) {
+
+    var email by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    Box(modifier = Modifier.fillMaxSize()) {
+
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            // RED TOP AREA
+            Box(
+                modifier = Modifier
+                    .weight(0.4f)
+                    .fillMaxWidth()
+                    .background(BrandRed),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.logo),
+                    contentDescription = "Logo",
+                    modifier = Modifier.width(200.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
+
+            // WHITE AREA
+            Box(
+                modifier = Modifier
+                    .weight(0.6f)
+                    .fillMaxWidth()
+                    .background(Color.White)
+            ) {
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        text = "Login with Email",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextBlack
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Enter your Email Id to receive a\nverification code",
+                        textAlign = TextAlign.Center,
+                        fontSize = 14.sp,
+                        color = TextGray
+                    )
+
+                    Spacer(modifier = Modifier.height(30.dp))
+
+                    // EMAIL FIELD
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        placeholder = { Text("Enter Email") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF0F0F0), RoundedCornerShape(8.dp)),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedBorderColor = Color.Transparent
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // GET OTP BUTTON
+                    Button(
+                        onClick = {
+
+                            if (email.isBlank()) return@Button
+
+                            scope.launch {
+
+                                isLoading = true
+
+                                try {
+
+                                    val response =
+                                        RetrofitInstance.api.sendEmailOtp(
+                                            SendOtpRequest(email)
+                                        )
+
+                                    if (response.isSuccessful) {
+
+                                        onGetOtpClick(email)
+
+                                    }
+
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+
+                                isLoading = false
+                            }
+
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                    ) {
+
+                        if (isLoading) {
+
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+
+                        } else {
+
+                            Text(
+                                "Get OTP",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                        }
+
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        "Login with Email",
+                        color = TextGray,
+                        fontSize = 12.sp
+                    )
+
+                    Text(
+                        "Continue as Guest",
+                        color = TextGray,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+// --- SCREEN 2: OTP (Image 4) ---
+@Composable
+fun OtpScreen(
+    email: String,
+    onVerifyClick: () -> Unit,
+    onBackClick: () -> Unit
+) {
+
+    var otp by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            // RED TOP AREA
+            Box(
+                modifier = Modifier
+                    .weight(0.4f)
+                    .fillMaxWidth()
+                    .background(BrandRed),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.logo),
+                    contentDescription = "Logo",
+                    modifier = Modifier.width(200.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
+
+            // WHITE BOTTOM AREA
+            Box(
+                modifier = Modifier
+                    .weight(0.6f)
+                    .fillMaxWidth()
+                    .background(Color.White)
+            ) {
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        text = "Verify your email",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextBlack
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "We sent a 4-digit code to your email address",
+                        textAlign = TextAlign.Center,
+                        fontSize = 14.sp,
+                        color = TextGray
+                    )
+
+                    Spacer(modifier = Modifier.height(30.dp))
+
+                    // OTP INPUT FIELD
+                    OutlinedTextField(
+                        value = otp,
+                        onValueChange = {
+                            if (it.length <= 4) otp = it
+                        },
+                        placeholder = { Text("Enter OTP") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(40.dp))
+
+                    // VERIFY BUTTON
+                    Button(
+                        onClick = {
+
+                            if (otp.length < 4) return@Button
+
+                            scope.launch {
+
+                                isLoading = true
+
+                                try {
+
+                                    val response =
+                                        RetrofitInstance.api.verifyEmailOtp(
+                                            VerifyOtpRequest(
+                                                email = email,
+                                                otp = otp
+                                            )
+                                        )
+
+                                    if (response.isSuccessful) {
+                                        onVerifyClick()
+                                    }
+
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+
+                                isLoading = false
+                            }
+
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                    ) {
+
+                        if (isLoading) {
+
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+
+                        } else {
+
+                            Text(
+                                "Verify",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                        }
+
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        "Resend code",
+                        color = TextGray,
+                        fontSize = 12.sp
+                    )
+
+                    Text(
+                        "Change email address",
+                        color = TextGray,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .clickable { onBackClick() }
+                            .padding(top = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+// -------------------------------------------------------------------------
+// EXISTING CODE (UNCHANGED BELOW THIS LINE, EXCEPT NEEDED REUSABLE FUNCS)
+// -------------------------------------------------------------------------
 
 @Composable
 fun NewsDetailScreen(article: NewsArticle) {
