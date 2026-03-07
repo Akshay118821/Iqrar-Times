@@ -30,14 +30,24 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.iqrarnewscompose.CategoryItem
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 
 // --- COLORS (Defined locally to ensure they appear correctly) ---
 val BrandRed = Color(0xFFD32F2F)
 val TextBlack = Color(0xFF111111)
 val BgGrey = Color(0xFFF5F5F5)        // Light Grey Background
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ProfileScreen(onToggleHeader: (Boolean) -> Unit) {
+fun ProfileScreen(
+    categories: List<CategoryItem>,
+    onToggleHeader: (Boolean) -> Unit,
+    openLogin: () -> Unit
+){
 
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
@@ -76,7 +86,9 @@ fun ProfileScreen(onToggleHeader: (Boolean) -> Unit) {
                             }
                             context.startActivity(intent)
                         },
-                        onLoginClick = { },
+                        onLoginClick = {
+                            openLogin()
+                        },
                     )
                 } else {
                     LoggedProfileView(
@@ -104,6 +116,7 @@ fun ProfileScreen(onToggleHeader: (Boolean) -> Unit) {
 
                 var pushEnabled by remember { mutableStateOf(true) }
                 var language by remember { mutableStateOf("English") }
+                val selectedCategories = remember { mutableStateListOf<String>() }
 
                 Column(
                     modifier = Modifier
@@ -141,23 +154,36 @@ fun ProfileScreen(onToggleHeader: (Boolean) -> Unit) {
                         border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            // Row 1
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                ScreenshotChip(politics, "Politics") { politics = !politics }
-                                ScreenshotChip(business, "Business") { business = !business }
-                                ScreenshotChip(sports, "Sports") { sports = !sports }
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            // Row 2
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                ScreenshotChip(technology, "Technology") { technology = !technology }
-                                ScreenshotChip(entertainment, "Entertainment") { entertainment = !entertainment }
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            // Row 3
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                ScreenshotChip(science, "Science") { science = !science }
+
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(3),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 400.dp)
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+
+                            items(categories) { category ->
+
+                                val name = category.name ?: ""
+
+                                val isSelected = selectedCategories.contains(name)
+
+                                ScreenshotChip(
+                                    selected = isSelected,
+                                    label = name
+                                ) {
+
+                                    if (isSelected) {
+                                        selectedCategories.remove(name)
+                                    } else {
+                                        selectedCategories.add(name)
+                                    }
+
+                                }
+
                             }
                         }
                     }
@@ -275,7 +301,18 @@ fun ProfileScreen(onToggleHeader: (Boolean) -> Unit) {
 
                     // --- SAVE BUTTON ---
                     Button(
-                        onClick = { localView = "Main" },
+                        onClick = {
+
+                            val prefs = context.getSharedPreferences("user_preferences", Context.MODE_PRIVATE)
+
+                            prefs.edit()
+                                .putStringSet("selected_categories", selectedCategories.toSet())
+                                .putBoolean("notifications", pushEnabled)
+                                .putString("language", language)
+                                .apply()
+
+                            localView = "Main"
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(55.dp),
@@ -295,14 +332,18 @@ fun ProfileScreen(onToggleHeader: (Boolean) -> Unit) {
             }
 
             // ================== OTHER SCREENS ==================
-            "Terms" -> LocalWebViewScreen("नियम और शर्तें", "https://www.iqrartimes.com/terms-of-service") {
-                localView = "Main"
-                onToggleHeader(true)
+            "Terms" -> {
+                LocalWebViewScreen("नियम और शर्तें", "https://www.iqrartimes.com/terms-of-service") {
+                    localView = "Main"
+                    onToggleHeader(true)
+                }
             }
 
-            "Privacy" -> LocalWebViewScreen("गोपनीयता नीति", "https://www.iqrartimes.com/privacy-policy") {
-                localView = "Main"
-                onToggleHeader(true)
+            "Privacy" -> {
+                LocalWebViewScreen("गोपनीयता नीति", "https://www.iqrartimes.com/privacy-policy") {
+                    localView = "Main"
+                    onToggleHeader(true)
+                }
             }
         }
     }

@@ -60,6 +60,8 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import com.example.iqrarnewscompose.profile.ProfileMenuView
+import com.example.iqrarnewscompose.NewsViewModel
+import androidx.compose.runtime.Composable
 
 // Data Model
 data class NewsArticle(
@@ -242,20 +244,20 @@ fun MainContent(
     onOpenDrawer: () -> Unit,
     openLogin: () -> Unit
 ) {
+
     var selectedScreen by remember { mutableStateOf("Home") }
     var currentLanguage by remember { mutableStateOf("Hindi") }
+
+    var showLanguageMenu by remember { mutableStateOf(false) }
+    var isMainHeaderVisible by remember { mutableStateOf(true) }
+
+    var selectedArticle by remember { mutableStateOf<NewsArticle?>(null) }
+    var isFlipMode by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentLanguage) {
         val langParam = if (currentLanguage == "Hindi") "HINDI" else "ENGLISH"
         viewModel.loadCategories(langParam)
     }
-
-    var showLanguageMenu by remember { mutableStateOf(false) }
-    var isSearchActive by remember { mutableStateOf(false) }
-    var searchText by remember { mutableStateOf("") }
-    var isMainHeaderVisible by remember { mutableStateOf(true) }
-
-    var selectedArticle by remember { mutableStateOf<NewsArticle?>(null) }
 
     BackHandler(enabled = selectedArticle != null) {
         selectedArticle = null
@@ -264,13 +266,24 @@ fun MainContent(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+
         topBar = {
-            if (selectedArticle != null) {
-                val displayCategory = if (currentLanguage == "Hindi") {
-                    when (selectedScreen) {
-                        else -> selectedScreen
+            if (isFlipMode) {
+
+                ToggleNewsScreen(
+                    viewModel = viewModel,
+                    onBack = {
+                        isFlipMode = false
                     }
-                } else selectedScreen
+                )
+
+            }
+            else if (selectedArticle != null) {
+
+                NewsDetailScreen(article = selectedArticle!!)
+
+            }
+            if (selectedArticle != null) {
 
                 val categoryName = viewModel.categories
                     .find { it.id.toString() == selectedScreen }
@@ -295,62 +308,49 @@ fun MainContent(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandRed)
                 )
+
             } else if (isMainHeaderVisible) {
+
                 TopAppBar(
+
                     title = {
-                        if (isSearchActive) {
-                            TextField(
-                                value = searchText,
-                                onValueChange = { searchText = it },
-                                placeholder = {
-                                    Text(
-                                        if (currentLanguage == "Hindi") "खोजें..." else "Search...",
-                                        color = Color.White.copy(alpha = 0.8f)
-                                    )
-                                },
-                                singleLine = true,
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent,
-                                    cursorColor = Color.White,
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent
-                                ),
-                                modifier = Modifier.fillMaxWidth()
+
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+
+                            Image(
+                                painter = painterResource(id = R.drawable.logo),
+                                contentDescription = "Logo",
+                                modifier = Modifier.height(32.dp),
+                                contentScale = ContentScale.Fit
                             )
-                        } else {
-                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.logo),
-                                    contentDescription = "Logo",
-                                    modifier = Modifier
-                                        .height(38.dp)
-                                        .width(180.dp),
-                                    contentScale = ContentScale.Fit
-                                )
-                            }
+
                         }
+
                     },
+
                     navigationIcon = {
-                        if (isSearchActive) {
-                            IconButton(onClick = { isSearchActive = false; searchText = "" }) {
-                                Icon(Icons.Default.ArrowBack, null, tint = Color.White)
-                            }
-                        } else {
-                            // ✅ DRAWER OPEN ACTION LINKED HERE
-                            IconButton(onClick = { onOpenDrawer() }) {
-                                Icon(Icons.Default.Menu, null, tint = Color.White)
-                            }
+
+                        IconButton(onClick = { onOpenDrawer() }) {
+                            Icon(Icons.Default.Menu, null, tint = Color.White)
                         }
+
                     },
+
                     actions = {
-                        if (!isSearchActive) {
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
                             Box {
+
                                 IconButton(onClick = { showLanguageMenu = true }) {
                                     Icon(Icons.Default.Translate, null, tint = Color.White)
                                 }
+
                                 DropdownMenu(
                                     expanded = showLanguageMenu,
                                     onDismissRequest = { showLanguageMenu = false },
@@ -360,56 +360,96 @@ fun MainContent(
                                     DropdownMenuItem(
                                         text = { Text("English", color = TextBlack) },
                                         onClick = {
+
                                             currentLanguage = "English"
                                             showLanguageMenu = false
+
                                             viewModel.loadCategories("ENGLISH")
+
                                             if (selectedScreen != "Home") {
-                                                viewModel.loadNews(selectedScreen, "ENGLISH") { }
+                                                viewModel.loadNews(selectedScreen, "ENGLISH") {}
                                             } else {
-                                                viewModel.loadNews("", "ENGLISH") { }
+                                                viewModel.loadNews("", "ENGLISH") {}
                                             }
+
                                         }
                                     )
 
                                     DropdownMenuItem(
                                         text = { Text("हिंदी", color = TextBlack) },
                                         onClick = {
+
                                             currentLanguage = "Hindi"
                                             showLanguageMenu = false
+
                                             viewModel.loadCategories("HINDI")
 
                                             if (selectedScreen != "Home") {
-                                                viewModel.loadNews(selectedScreen, "HINDI") { }
+                                                viewModel.loadNews(selectedScreen, "HINDI") {}
                                             } else {
-                                                viewModel.loadNews("", "HINDI") { }
+                                                viewModel.loadNews("", "HINDI") {}
                                             }
+
                                         }
                                     )
                                 }
+
                             }
-                            IconButton(onClick = { isSearchActive = true }) {
-                                Icon(Icons.Default.Search, null, tint = Color.White)
-                            }
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            Image(
+                                painter = painterResource(id = R.drawable.header_badge),
+                                contentDescription = "Header Badge",
+                                modifier = Modifier
+                                    .height(28.dp)
+                                    .padding(end = 12.dp),
+                                contentScale = ContentScale.Fit
+                            )
+
                         }
+
                     },
+
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandRed)
+
                 )
             }
         },
+
         bottomBar = {
+
             if (isMainHeaderVisible && selectedArticle == null) {
-                IqrarBottomBar(selectedScreen, currentLanguage, onNavigate = {
-                    selectedScreen = it
-                    isMainHeaderVisible = true
-                })
+
+                IqrarBottomBar(
+                    selectedScreen,
+                    currentLanguage,
+                    onNavigate = {
+
+                        selectedScreen = it
+                        isMainHeaderVisible = true
+
+                    }
+                )
             }
+
         }
+
     ) { innerPadding ->
+
         Box(modifier = Modifier.padding(innerPadding)) {
+
             if (selectedArticle != null) {
+
                 NewsDetailScreen(article = selectedArticle!!)
+
+
             } else {
-                val isLoggedIn = null
+
+                val context = LocalContext.current
+                val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+                val isLoggedIn = prefs.getBoolean("isLoggedIn", false)
+
                 when (selectedScreen) {
 
                     "Home" -> HomeScreen(
@@ -420,15 +460,18 @@ fun MainContent(
                         viewModel = viewModel
                     )
 
-                    "Profile" -> ProfileScreen(
-                        lang = currentLanguage,
-                        isLoggedIn = isLoggedIn == true,
-                        onHeaderVisibilityChange = { isMainHeaderVisible = it },
+                    "Profile" -> com.example.iqrarnewscompose.profile.ProfileScreen(
+                        categories = viewModel.categories,
+                        onToggleHeader = { isMainHeaderVisible = it },
                         openLogin = { openLogin() }
                     )
 
                     "Live TV" -> LiveTVScreen(currentLanguage, viewModel)
-                    "E-Paper" -> EPaperScreen("https://www.iqrartimes.com/epaper/delhi?page=1")
+
+                    "E-Paper" -> EPaperScreen(
+                        "https://www.iqrartimes.com/epaper/delhi?page=1"
+                    )
+
                     "Videos" -> VideosScreen(currentLanguage, viewModel)
 
                     else -> CategoryNewsScreen(
@@ -444,6 +487,7 @@ fun MainContent(
         }
     }
 }
+
 
 // ------------------------------------------------------------
 // ✅ NEW COMPOSABLES: Drawer, Login Screen, OTP Screen
@@ -1763,11 +1807,11 @@ fun CategoryNewsScreen(
 fun DynamicCategorySection(
     categories: List<CategoryItem>,
     selected: String,
+
     onClick: (String) -> Unit
 ) {
     val parentCategories = categories
         .filter { it.parent_id == "0" || it.parent_id == null }
-        .sortedBy { it.priority ?: 0 }
 
 
     val allCategories = listOf("Home" to "Home") +
@@ -2002,4 +2046,61 @@ fun IqrarBottomBar(sel: String, lang: String, onNavigate: (String) -> Unit) {
         }
     }
 }
-//changes applied in this codes
+
+@Composable
+fun ToggleNewsScreen(
+    viewModel: NewsViewModel,
+    onBack: () -> Unit
+) {
+
+    val context = LocalContext.current
+
+    val prefs = context.getSharedPreferences("user_preferences", Context.MODE_PRIVATE)
+
+    val selectedCategories =
+        prefs.getStringSet("selected_categories", emptySet()) ?: emptySet()
+
+    val newsList = viewModel.newsList
+
+    val filteredNews = newsList.filter { news ->
+        selectedCategories.contains(news.category_name)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            IconButton(onClick = { onBack() }) {
+                Icon(Icons.Default.ArrowBack, null)
+            }
+
+            Text(
+                text = "Your News",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        LazyColumn {
+
+            items(filteredNews) { news ->
+
+                SmallNewsCard(
+                    img = news.icon,
+                    tit = news.name ?: "",
+                    date = news.date ?: "",
+                    auth = news.author ?: "Admin"
+                )
+
+            }
+
+        }
+
+    }
+}

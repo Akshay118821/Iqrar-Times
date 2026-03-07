@@ -17,15 +17,26 @@ class NewsViewModel : ViewModel() {
 
     var isLoading = mutableStateOf(false)
 
-
     private val newsCache = mutableMapOf<String, List<ApiNewsArticle>>()
 
     fun loadCategories(lang: String) {
         viewModelScope.launch {
             try {
                 val response = repo.fetchCategories(lang)
+
+                // 🔥 SORTING LOGIC
+                val priorityCategories = response.data
+                    .filter { it.priority!! > 0 }
+                    .sortedBy { it.priority }
+
+                val zeroPriorityCategories = response.data
+                    .filter { it.priority == 0 }
+
+                val finalSortedCategories = priorityCategories + zeroPriorityCategories
+
                 categories.clear()
-                categories.addAll(response.data)
+                categories.addAll(finalSortedCategories)
+
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -34,7 +45,6 @@ class NewsViewModel : ViewModel() {
 
     fun loadNews(category: String, langParam: String, onDataLoaded: () -> Unit = {}) {
         viewModelScope.launch {
-
 
             val cacheKey = "$category-$langParam"
 
@@ -47,17 +57,14 @@ class NewsViewModel : ViewModel() {
 
             try {
                 isLoading.value = true
-                newsList.clear() // Clear old data first
+                newsList.clear()
 
-                // 2. Repo ki Language Pass Chestunnam
                 val data = if (category == "Home" || category == "HOME" || category == "") {
-                    // ⚠️ IMPORTANT: Repository function must accept language
                     repo.getAllNews(langParam)
                 } else {
                     repo.getNewsByCategory(category, langParam)
                 }
 
-                // 3. Save to cache with language key
                 newsCache[cacheKey] = data
                 newsList.addAll(data)
 
@@ -70,12 +77,10 @@ class NewsViewModel : ViewModel() {
         }
     }
 
-    // ... Video load function ...
     fun loadNewsSeparate(category: String, onDataLoaded: (List<ApiNewsArticle>) -> Unit) {
-        // Indhulo kuda avasaram aithe lang param add cheyali later
         viewModelScope.launch {
             try {
-                val data = repo.getAllNews("HINDI") // Default HINDI for now
+                val data = repo.getAllNews("HINDI")
                 onDataLoaded(data)
             } catch (e: Exception) {
                 onDataLoaded(emptyList())

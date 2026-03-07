@@ -30,7 +30,13 @@ data class ApiNewsArticle(
 
     @SerializedName("youtube_url")
     val youtube_url: List<String>?
+
 ) {
+
+    val category_name: String
+        get() = categories?.firstOrNull() ?: ""
+
     val icon: String
         get() = image?.firstOrNull() ?: ""
+
 }
