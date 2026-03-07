@@ -78,6 +78,7 @@ class NewsViewModel : ViewModel() {
     }
 
     fun loadNewsSeparate(category: String, onDataLoaded: (List<ApiNewsArticle>) -> Unit) {
+
         viewModelScope.launch {
             try {
                 val data = repo.getAllNews("HINDI")
@@ -86,5 +87,7 @@ class NewsViewModel : ViewModel() {
                 onDataLoaded(emptyList())
             }
         }
+
     }
+
 }

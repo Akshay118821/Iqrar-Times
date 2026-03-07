@@ -136,6 +136,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
     implementation(libs.firebase.crashlytics)
     implementation(libs.androidx.compose.ui.text)
+    implementation(libs.firebase.messaging)
 
 
     debugImplementation(libs.androidx.compose.ui.tooling)

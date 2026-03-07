@@ -62,6 +62,8 @@ import androidx.compose.material.icons.filled.PlayCircleFilled
 import com.example.iqrarnewscompose.profile.ProfileMenuView
 import com.example.iqrarnewscompose.NewsViewModel
 import androidx.compose.runtime.Composable
+import com.google.firebase.messaging.FirebaseMessaging
+import android.util.Log
 
 // Data Model
 data class NewsArticle(
@@ -78,13 +80,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
-        // ✅ 1. Install Splash Screen (Must be first)
+        //  1. Install Splash Screen (Must be first)
         val splashScreen = installSplashScreen()
 
         super.onCreate(savedInstanceState)
 
-        // ✅ 2. Pre-load Data Logic (Fix for Blank Screen)
-        // Default language: Hindi
+        FirebaseMessaging.getInstance().token
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val token = task.result
+                    Log.d("FCM_TOKEN", token)
+                }
+            }
+
         viewModel.loadCategories("HINDI")
 
         var isDataLoaded = false
@@ -96,10 +104,10 @@ class MainActivity : ComponentActivity() {
 
         val startTime = System.currentTimeMillis()
 
-        // ✅ 3. Keep Splash Screen until Data is Ready
+
         splashScreen.setKeepOnScreenCondition {
-            // Keep splash if data NOT loaded AND time is less than 3 seconds
-            val isTakingTooLong = (System.currentTimeMillis() - startTime) > 3000
+
+            val isTakingTooLong = (System.currentTimeMillis() - startTime) > 1000
             (!isDataLoaded && !isTakingTooLong)
         }
 
@@ -939,7 +947,8 @@ fun OtpScreen(
 
 @Composable
 fun NewsDetailScreen(article: NewsArticle) {
-
+    var showComments by remember { mutableStateOf(false) }
+    val viewModel: NewsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
     val context = LocalContext.current
 
     Column(
@@ -1061,11 +1070,7 @@ fun NewsDetailScreen(article: NewsArticle) {
 
                         if (!isLoggedIn) {
 
-                            Toast.makeText(
-                                context,
-                                "Please login to comment",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            showComments = true
 
                         } else {
 
@@ -1074,11 +1079,10 @@ fun NewsDetailScreen(article: NewsArticle) {
                                 "Open comment box",
                                 Toast.LENGTH_SHORT
                             ).show()
-
                         }
 
                     }
-                ) {
+                ){
 
                     Icon(
                         Icons.Default.Comment,

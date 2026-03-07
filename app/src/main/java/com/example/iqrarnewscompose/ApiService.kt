@@ -53,6 +53,11 @@ interface ApiService {
     suspend fun verifyEmailOtp(
         @Body request: VerifyOtpRequest
     ): Response<CommonResponse>
+
+    @GET("news/news/comment")
+    suspend fun getNewsComments(
+        @Query("news_id") newsId: String
+    ): Response<CommentResponse>
 }
 
 
@@ -79,4 +84,17 @@ data class CommonResponse(
     val success: Boolean? = null,
     val message: String? = null,
     val token: String? = null
+)
+
+data class CommentResponse(
+    val status: Boolean? = null,
+    val message: String? = null,
+    val data: List<Comment>? = null
+)
+
+data class Comment(
+    val id: String? = null,
+    val user_name: String? = null,
+    val comment: String? = null,
+    val created_at: String? = null
 )
