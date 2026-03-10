@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.iqrarnewscompose.api.ApiNewsArticle
+import com.example.iqrarnewscompose.api.Comment
 import com.example.iqrarnewscompose.api.NewsRepository
 import kotlinx.coroutines.launch
 
@@ -14,6 +15,10 @@ class NewsViewModel : ViewModel() {
 
     val newsList = mutableStateListOf<ApiNewsArticle>()
     val categories = mutableStateListOf<CategoryItem>()
+    val commentsList = mutableStateListOf<Comment>()
+
+    // 🔥 KOTHA LINE: E-Paper data store cheskovadaniki
+    val epaperList = mutableStateListOf<com.example.iqrarnewscompose.api.EPaperItem>()
 
     var isLoading = mutableStateOf(false)
 
@@ -90,4 +95,46 @@ class NewsViewModel : ViewModel() {
 
     }
 
+    fun loadComments(newsId: String) {
+        viewModelScope.launch {
+            try {
+                val data = repo.fetchComments(newsId)
+                commentsList.clear()
+                commentsList.addAll(data)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun postComment(token: String, newsId: String, comment: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val success = repo.postComment(token, newsId, comment)
+                if (success) {
+                    loadComments(newsId) // Refresh comments
+                }
+                onResult(success)
+            } catch (e: Exception) {
+                onResult(false)
+            }
+        }
+    }
+
+    //  KOTHA FUNCTION: E-Paper data techukovadaniki
+    fun loadEPaper(lang: String, date: String) {
+        viewModelScope.launch {
+            try {
+                epaperList.clear()
+                val data = repo.fetchEPaper(lang, date)
+
+                // 🔥 ఇక్కడ ఫిల్టర్ యాడ్ చేశాను - సర్వర్ మొత్తం పంపినా, మనం అడిగిన డేట్ మాత్రమే తీసుకుంటాం
+                val filteredData = data.filter { it.date == date }
+
+                epaperList.addAll(filteredData)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 }

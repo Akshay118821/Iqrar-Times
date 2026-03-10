@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- Internal Cache (Matches context.cacheDir) -->
+    <!-- 1. Internal Cache (Matches context.cacheDir) -->
+    <!-- 🔥 Indhuvalle image share avthundi -->
     <cache-path name="cache_images" path="images/" />
 
-
+    <!-- 2. External Cache (Safe side kosam) -->
     <external-cache-path name="external_cache_images" path="images/" />
+
+    <!-- 3. External Files (Download ayyi gallery lo unna images share cheyadaniki) -->
+    <!-- 🔥 IDHI KACHITHAMGA UNDALI, LEKAPOTHE CRASH AVTHUNDI -->
+    <external-path name="external_files" path="." />
 </paths>

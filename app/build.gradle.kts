@@ -137,6 +137,8 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.androidx.compose.ui.text)
     implementation(libs.firebase.messaging)
+    implementation(libs.androidx.foundation)
+    implementation(libs.androidx.compose.runtime.saveable)
 
 
     debugImplementation(libs.androidx.compose.ui.tooling)

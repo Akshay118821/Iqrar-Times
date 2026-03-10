@@ -5,12 +5,10 @@ import VideoItemCard
 import VideosScreen
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -53,6 +51,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.iqrarnewscompose.api.RetrofitInstance
 import com.example.iqrarnewscompose.api.SendOtpRequest
 import com.example.iqrarnewscompose.api.VerifyOtpRequest
+import com.example.iqrarnewscompose.api.CommonResponse
 import com.example.iqrarnewscompose.ui.theme.IqrarNewsComposeTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -60,13 +59,24 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import com.example.iqrarnewscompose.profile.ProfileMenuView
-import com.example.iqrarnewscompose.NewsViewModel
 import androidx.compose.runtime.Composable
 import com.google.firebase.messaging.FirebaseMessaging
 import android.util.Log
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.iqrarnewscompose.profile.LoggedProfileView
+import com.example.iqrarnewscompose.profile.PreferencesScreen
+import kotlinx.coroutines.Dispatchers
+import androidx.core.content.FileProvider
+import coil.ImageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import android.graphics.drawable.BitmapDrawable
+import java.io.File
+import java.io.FileOutputStream
 
 // Data Model
 data class NewsArticle(
+    val id: String,
     val title: String,
     val image: String,
     val date: String,
@@ -84,6 +94,12 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
 
         super.onCreate(savedInstanceState)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            requestPermissions(
+                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                1
+            )
+        }
 
         FirebaseMessaging.getInstance().token
             .addOnCompleteListener { task ->
@@ -148,6 +164,7 @@ fun MainApp(viewModel: NewsViewModel) {
     }
 
     var userEmail by remember { mutableStateOf("") }
+    var showLoginDialog by remember { mutableStateOf(false) }
 
     BackHandler(enabled = authStep > 0 || drawerState.isOpen) {
         if (drawerState.isOpen) {
@@ -168,21 +185,20 @@ fun MainApp(viewModel: NewsViewModel) {
             ) {
 
                 SideMenuDrawer(
-
                     isLoggedIn = isLoggedIn,
-
+                    userName = "Kalyan Kumar", // 🔥 Profile స్క్రీన్ లో ఉన్న పేరు ఇక్కడ ఇస్తున్నాం
                     onLoginClick = {
                         scope.launch { drawerState.close() }
                         authStep = 1
                     },
-
                     onLogoutClick = {
-
-                        // clear login
                         prefs.edit().putBoolean("isLoggedIn", false).apply()
                         isLoggedIn = false
-
-                        // close drawer
+                        scope.launch { drawerState.close() }
+                    },
+                    // 🔥 క్లిక్ చేస్తే ప్రొఫైల్ కి వెళ్ళాలి
+                    onViewProfileClick = {
+                        var selectedScreen = "Profile"
                         scope.launch { drawerState.close() }
                     }
                 )
@@ -194,13 +210,32 @@ fun MainApp(viewModel: NewsViewModel) {
 
             MainContent(
                 viewModel = viewModel,
+                isLoggedIn = isLoggedIn,
                 onOpenDrawer = {
                     scope.launch { drawerState.open() }
                 },
                 openLogin = {
                     authStep = 1
+                },
+                openLoginDialog = {
+                    showLoginDialog = true
                 }
             )
+
+            if (showLoginDialog) {
+                LoginDialog(
+                    onDismiss = { showLoginDialog = false },
+                    onLoginSuccess = { result ->
+                        isLoggedIn = true
+                        val tkn = result.token ?: result.data?.token ?: result.data?.accessToken ?: result.data?.auth_token ?: ""
+                        prefs.edit()
+                            .putBoolean("isLoggedIn", true)
+                            .putString("token", tkn)
+                            .apply()
+                        showLoginDialog = false
+                    }
+                )
+            }
 
             // LOGIN SCREEN
             if (authStep == 1) {
@@ -232,8 +267,6 @@ fun MainApp(viewModel: NewsViewModel) {
 
                         // login success
                         isLoggedIn = true
-                        prefs.edit().putBoolean("isLoggedIn", true).apply()
-
                         authStep = 0
                     },
 
@@ -249,53 +282,123 @@ fun MainApp(viewModel: NewsViewModel) {
 @Composable
 fun MainContent(
     viewModel: NewsViewModel,
+    isLoggedIn: Boolean,
     onOpenDrawer: () -> Unit,
-    openLogin: () -> Unit
+    openLogin: () -> Unit,
+    openLoginDialog: () -> Unit
 ) {
 
     var selectedScreen by remember { mutableStateOf("Home") }
     var currentLanguage by remember { mutableStateOf("Hindi") }
-
     var showLanguageMenu by remember { mutableStateOf(false) }
     var isMainHeaderVisible by remember { mutableStateOf(true) }
-
     var selectedArticle by remember { mutableStateOf<NewsArticle?>(null) }
+
     var isFlipMode by remember { mutableStateOf(false) }
+    var currentFlipPage by remember { mutableIntStateOf(0) }
+    var tempBarsVisible by remember { mutableStateOf(false) }
+
+    // 🔥 TIMER: 2 seconds taruvatha bars hide avvali
+    LaunchedEffect(tempBarsVisible) {
+        if (tempBarsVisible) {
+            delay(2000)
+            tempBarsVisible = false
+        }
+    }
 
     LaunchedEffect(currentLanguage) {
         val langParam = if (currentLanguage == "Hindi") "HINDI" else "ENGLISH"
         viewModel.loadCategories(langParam)
     }
 
-    BackHandler(enabled = selectedArticle != null) {
-        selectedArticle = null
-        isMainHeaderVisible = true
+    BackHandler(enabled = selectedArticle != null || isFlipMode) {
+        if (selectedArticle != null) {
+            selectedArticle = null
+            if (!isFlipMode) isMainHeaderVisible = true
+        } else if (isFlipMode) {
+            isFlipMode = false
+            currentFlipPage = 0
+            isMainHeaderVisible = true
+        }
     }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
 
         topBar = {
-            if (isFlipMode) {
+            // Logic: Flip mode lo unnappudu tap chesthene Header ravali
+            val shouldShowHeader = !isFlipMode || (isFlipMode && tempBarsVisible)
 
-                ToggleNewsScreen(
-                    viewModel = viewModel,
-                    onBack = {
-                        isFlipMode = false
-                    }
-                )
-
-            }
-            else if (selectedArticle != null) {
-
-                NewsDetailScreen(article = selectedArticle!!)
-
-            }
-            if (selectedArticle != null) {
-
+            if (shouldShowHeader && selectedArticle == null) {
+                if (isMainHeaderVisible) {
+                    TopAppBar(
+                        title = {
+                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                Image(painter = painterResource(id = R.drawable.logo), contentDescription = "Logo", modifier = Modifier.height(32.dp), contentScale = ContentScale.Fit)
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = {
+                                onOpenDrawer()
+                                if(isFlipMode) tempBarsVisible = true
+                            }) {
+                                Icon(Icons.Default.Menu, null, tint = Color.White)
+                            }
+                        },
+                        actions = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box {
+                                    IconButton(onClick = {
+                                        showLanguageMenu = true
+                                        if(isFlipMode) tempBarsVisible = true
+                                    }) {
+                                        Icon(Icons.Default.Translate, null, tint = Color.White)
+                                    }
+                                    DropdownMenu(
+                                        expanded = showLanguageMenu,
+                                        onDismissRequest = { showLanguageMenu = false },
+                                        modifier = Modifier.background(Color.White)
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("English", color = TextBlack) },
+                                            onClick = {
+                                                currentLanguage = "English"
+                                                showLanguageMenu = false
+                                                isFlipMode = false // 🔥 Close Flip Screen
+                                                viewModel.loadCategories("ENGLISH")
+                                                viewModel.loadNews("", "ENGLISH") {}
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("हिंदी", color = TextBlack) },
+                                            onClick = {
+                                                currentLanguage = "Hindi"
+                                                showLanguageMenu = false
+                                                isFlipMode = false // 🔥 Close Flip Screen
+                                                viewModel.loadCategories("HINDI")
+                                                viewModel.loadNews("", "HINDI") {}
+                                            }
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                IconButton(onClick = {
+                                    isFlipMode = true
+                                    tempBarsVisible = true
+                                }) {
+                                    Image(painter = painterResource(id = R.drawable.header_badge), contentDescription = "Header Badge", modifier = Modifier.height(28.dp), contentScale = ContentScale.Fit)
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandRed)
+                    )
+                }
+            } else if (selectedArticle != null) {
+                // 🔥 కేటగిరీ పేరుని వెతికే లాజిక్
                 val categoryName = viewModel.categories
                     .find { it.id.toString() == selectedScreen }
-                    ?.name ?: selectedScreen
+                    ?.name ?: if (selectedScreen == "Home") "Iqrar Times" else "News"
 
                 TopAppBar(
                     title = {
@@ -309,194 +412,79 @@ fun MainContent(
                     navigationIcon = {
                         IconButton(onClick = {
                             selectedArticle = null
-                            isMainHeaderVisible = true
+
+                            if (!isFlipMode) isMainHeaderVisible = true
                         }) {
                             Icon(Icons.Default.ArrowBack, null, tint = Color.White)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandRed)
                 )
-
-            } else if (isMainHeaderVisible) {
-
-                TopAppBar(
-
-                    title = {
-
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-
-                            Image(
-                                painter = painterResource(id = R.drawable.logo),
-                                contentDescription = "Logo",
-                                modifier = Modifier.height(32.dp),
-                                contentScale = ContentScale.Fit
-                            )
-
-                        }
-
-                    },
-
-                    navigationIcon = {
-
-                        IconButton(onClick = { onOpenDrawer() }) {
-                            Icon(Icons.Default.Menu, null, tint = Color.White)
-                        }
-
-                    },
-
-                    actions = {
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-
-                            Box {
-
-                                IconButton(onClick = { showLanguageMenu = true }) {
-                                    Icon(Icons.Default.Translate, null, tint = Color.White)
-                                }
-
-                                DropdownMenu(
-                                    expanded = showLanguageMenu,
-                                    onDismissRequest = { showLanguageMenu = false },
-                                    modifier = Modifier.background(Color.White)
-                                ) {
-
-                                    DropdownMenuItem(
-                                        text = { Text("English", color = TextBlack) },
-                                        onClick = {
-
-                                            currentLanguage = "English"
-                                            showLanguageMenu = false
-
-                                            viewModel.loadCategories("ENGLISH")
-
-                                            if (selectedScreen != "Home") {
-                                                viewModel.loadNews(selectedScreen, "ENGLISH") {}
-                                            } else {
-                                                viewModel.loadNews("", "ENGLISH") {}
-                                            }
-
-                                        }
-                                    )
-
-                                    DropdownMenuItem(
-                                        text = { Text("हिंदी", color = TextBlack) },
-                                        onClick = {
-
-                                            currentLanguage = "Hindi"
-                                            showLanguageMenu = false
-
-                                            viewModel.loadCategories("HINDI")
-
-                                            if (selectedScreen != "Home") {
-                                                viewModel.loadNews(selectedScreen, "HINDI") {}
-                                            } else {
-                                                viewModel.loadNews("", "HINDI") {}
-                                            }
-
-                                        }
-                                    )
-                                }
-
-                            }
-
-                            Spacer(modifier = Modifier.width(6.dp))
-
-                            Image(
-                                painter = painterResource(id = R.drawable.header_badge),
-                                contentDescription = "Header Badge",
-                                modifier = Modifier
-                                    .height(28.dp)
-                                    .padding(end = 12.dp),
-                                contentScale = ContentScale.Fit
-                            )
-
-                        }
-
-                    },
-
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandRed)
-
-                )
             }
         },
 
         bottomBar = {
 
-            if (isMainHeaderVisible && selectedArticle == null) {
+            val shouldShowBottomBar = (!isFlipMode && isMainHeaderVisible && selectedArticle == null) || (isFlipMode && tempBarsVisible)
 
+            if (shouldShowBottomBar) {
                 IqrarBottomBar(
                     selectedScreen,
                     currentLanguage,
-                    onNavigate = {
-
-                        selectedScreen = it
+                    onNavigate = { screen ->
+                        // 🔥 THE FIX: Navigate away from Flip Screen
+                        selectedScreen = screen
+                        isFlipMode = false
+                        currentFlipPage = 0
                         isMainHeaderVisible = true
-
                     }
                 )
             }
-
         }
 
     ) { innerPadding ->
 
-        Box(modifier = Modifier.padding(innerPadding)) {
+        // Overlay Logic: FlipMode lo unnapudu images resize avvadu (Floating bars)
+        val boxModifier = if (isFlipMode) Modifier.fillMaxSize() else Modifier.padding(innerPadding)
 
+        Box(modifier = boxModifier) {
             if (selectedArticle != null) {
-
-                NewsDetailScreen(article = selectedArticle!!)
-
-
-            } else {
-
-                val context = LocalContext.current
-                val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-                val isLoggedIn = prefs.getBoolean("isLoggedIn", false)
-
+                NewsDetailScreen(article = selectedArticle!!, isLoggedIn = isLoggedIn, onOpenLoginDialog = openLoginDialog)
+            }
+            else if (isFlipMode) {
+                FlipNewsScreen(
+                    viewModel = viewModel,
+                    initialPage = currentFlipPage,
+                    onBack = { isFlipMode = false; currentFlipPage = 0 },
+                    onPageChange = { page -> currentFlipPage = page },
+                    onNewsClick = { apiNews ->
+                        selectedArticle = NewsArticle(
+                            id = apiNews.id ?: "",
+                            title = apiNews.name ?: "",
+                            image = apiNews.icon ?: "",
+                            date = apiNews.date ?: "",
+                            author = apiNews.author ?: "Admin",
+                            content = apiNews.content ?: ""
+                        )
+                    },
+                    onScreenTap = {
+                        tempBarsVisible = !tempBarsVisible
+                    }
+                )
+            }
+            else {
                 when (selectedScreen) {
-
-                    "Home" -> HomeScreen(
-                        lang = currentLanguage,
-                        onNavigate = { selectedScreen = it },
-                        onNewsClick = { selectedArticle = it },
-                        categories = viewModel.categories,
-                        viewModel = viewModel
-                    )
-
-                    "Profile" -> com.example.iqrarnewscompose.profile.ProfileScreen(
-                        categories = viewModel.categories,
-                        onToggleHeader = { isMainHeaderVisible = it },
-                        openLogin = { openLogin() }
-                    )
-
+                    "Home" -> HomeScreen(lang = currentLanguage, onNavigate = { selectedScreen = it }, onNewsClick = { selectedArticle = it }, categories = viewModel.categories, viewModel = viewModel)
+                    "Profile" -> com.example.iqrarnewscompose.profile.ProfileScreen(categories = viewModel.categories, onToggleHeader = { isMainHeaderVisible = it }, openLogin = { openLogin() })
                     "Live TV" -> LiveTVScreen(currentLanguage, viewModel)
-
-                    "E-Paper" -> EPaperScreen(
-                        "https://www.iqrartimes.com/epaper/delhi?page=1"
-                    )
-
+                    "E-Paper" -> EPaperNativeScreen(viewModel, currentLanguage)
                     "Videos" -> VideosScreen(currentLanguage, viewModel)
-
-                    else -> CategoryNewsScreen(
-                        catId = selectedScreen,
-                        lang = currentLanguage,
-                        onNavigate = { selectedScreen = it },
-                        onNewsClick = { selectedArticle = it },
-                        categories = viewModel.categories,
-                        viewModel = viewModel
-                    )
+                    else -> CategoryNewsScreen(catId = selectedScreen, lang = currentLanguage, onNavigate = { selectedScreen = it }, onNewsClick = { selectedArticle = it }, categories = viewModel.categories, viewModel = viewModel)
                 }
             }
         }
     }
 }
-
-
 // ------------------------------------------------------------
 // ✅ NEW COMPOSABLES: Drawer, Login Screen, OTP Screen
 // ------------------------------------------------------------
@@ -504,96 +492,238 @@ fun MainContent(
 @Composable
 fun SideMenuDrawer(
     isLoggedIn: Boolean,
+    userName: String, // 🔥 Profile Screen లో ఉన్న పేరు ఇక్కడ పాస్ చేస్తాం
     onLoginClick: () -> Unit,
-    onLogoutClick: () -> Unit
+    onLogoutClick: () -> Unit,
+    onViewProfileClick: () -> Unit // 🔥 Navigation callback
 ){
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp)
-            .padding(top = 20.dp)
+            .background(Color.White)
     ) {
-        // --- Header Title ---
-        Text(
-            text = "Sign in to your account",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.Black,
-            modifier = Modifier.padding(bottom = 30.dp)
-        )
-
-        // --- Menu Items ---
-
-        // 1. Language Item
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Language, contentDescription = null, tint = Color.Black)
-                Spacer(modifier = Modifier.width(16.dp))
-                Text(text = "Language", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextBlack)
-            }
+        // --- 1. HEADER SECTION ---
+        if (isLoggedIn) {
+            // RED HEADER (Sync with Profile Screen)
             Box(
                 modifier = Modifier
-                    .border(1.dp, Color.LightGray, RoundedCornerShape(4.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .fillMaxWidth()
+                    .background(BrandRed)
+                    .padding(24.dp)
+                    .padding(top = 20.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("English", fontSize = 12.sp, color = TextBlack)
-                    Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(16.dp), tint = TextBlack)
+                Column {
+                    // Profile Icon (Same as Profile Screen)
+                    Surface(
+                        modifier = Modifier.size(65.dp),
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = Color.White.copy(alpha = 0.9f)
+                    ) {
+                        Icon(
+                            Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            modifier = Modifier.padding(2.dp),
+                            tint = Color.Gray
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Name (Same as Profile Screen: "Kalyan Kumar")
+                    Text(
+                        text = userName,
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(15.dp))
+
+                    // View Profile Button
+                    Button(
+                        onClick = onViewProfileClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.2f)),
+                        shape = RoundedCornerShape(50),
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                        modifier = Modifier.height(36.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
+                    ) {
+                        Text("View Profile", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        } else {
+            // BEFORE LOGIN HEADER
+            Text(
+                text = "Sign in to your account",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                modifier = Modifier.padding(24.dp).padding(top = 30.dp, bottom = 20.dp)
+            )
+        }
+
+        // --- 2. MENU ITEMS (No changes here) ---
+        Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)) {
+
+            // Language Item
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Outlined.Language, null, tint = Color.Black)
+                Spacer(modifier = Modifier.width(16.dp))
+                Text("Language", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = TextBlack)
+                Box(modifier = Modifier.border(1.dp, Color.LightGray, RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("English", fontSize = 12.sp, color = TextBlack)
+                        Icon(Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+
+            DrawerMenuItem(icon = Icons.Outlined.Settings, text = "Settings")
+            DrawerMenuItem(icon = Icons.Outlined.Security, text = "Privacy Policy")
+            DrawerMenuItem(icon = Icons.Outlined.Description, text = "Terms & Conditions")
+            DrawerMenuItem(icon = Icons.Outlined.HelpOutline, text = "Contact Us")
+
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(text = "Version 1.2.4", color = Color.Gray, fontSize = 13.sp)
+            Spacer(modifier = Modifier.height(30.dp))
+
+            // Login / Logout Button
+            Button(
+                onClick = { if (isLoggedIn) onLogoutClick() else onLoginClick() },
+                colors = ButtonDefaults.buttonColors(containerColor = BrandRed),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth().height(50.dp)
+            ) {
+                Text(text = if (isLoggedIn) "Logout" else "Login", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LoginDialog(
+    onDismiss: () -> Unit,
+    onLoginSuccess: (CommonResponse) -> Unit
+) {
+    var email by remember { mutableStateOf("") }
+    var otp by remember { mutableStateOf("") }
+    var step by remember { mutableStateOf(1) } // 1: Email, 2: OTP
+    var isLoading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = {},
+        containerColor = Color.White,
+        modifier = Modifier.padding(16.dp),
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (step == 1) {
+                    Text(
+                        text = "Login with Email",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextBlack
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        placeholder = { Text("Enter Email") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        onClick = {
+                            if (email.isBlank()) return@Button
+                            scope.launch {
+                                isLoading = true
+                                try {
+                                    val response = RetrofitInstance.api.sendEmailOtp(SendOtpRequest(email))
+                                    if (response.isSuccessful) {
+                                        step = 2
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                                isLoading = false
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandRed),
+                        modifier = Modifier.fillMaxWidth().height(45.dp)
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("Get OTP", color = Color.White)
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Verify OTP",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextBlack
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Sent to $email",
+                        fontSize = 12.sp,
+                        color = TextGray
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = otp,
+                        onValueChange = { if (it.length <= 4) otp = it },
+                        placeholder = { Text("Enter 4-digit OTP") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        onClick = {
+                            if (otp.length < 4) return@Button
+                            scope.launch {
+                                isLoading = true
+                                try {
+                                    val response = RetrofitInstance.api.verifyEmailOtp(VerifyOtpRequest(email, otp))
+                                    if (response.isSuccessful) {
+                                        onLoginSuccess(response.body()!!)
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                                isLoading = false
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandRed),
+                        modifier = Modifier.fillMaxWidth().height(45.dp)
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("Verify", color = Color.White)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel", color = TextGray)
                 }
             }
         }
-
-        // 2. Settings
-        DrawerMenuItem(icon = Icons.Outlined.Settings, text = "Settings")
-
-        // 3. Privacy Policy
-        DrawerMenuItem(icon = Icons.Outlined.Security, text = "Privacy Policy")
-
-        // 4. Terms & Conditions
-        DrawerMenuItem(icon = Icons.Outlined.Description, text = "Terms & Conditions")
-
-        // 5. Contact Us
-        DrawerMenuItem(icon = Icons.Outlined.HelpOutline, text = "Contact Us")
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // --- Version Info ---
-        Text(
-            text = "Version 1.2.4",
-            color = Color.Gray,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(vertical = 16.dp)
-        )
-
-        // --- Login Button ---
-        Button(
-            onClick = {
-                if (isLoggedIn) {
-                    onLogoutClick()
-                } else {
-                    onLoginClick()
-                }
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF2424)), // Red Color
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-        ) {
-            Text(
-                text = if (isLoggedIn) "Logout" else "Login",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
+    )
 }
 
 @Composable
@@ -612,6 +742,7 @@ fun DrawerMenuItem(icon: ImageVector, text: String) {
 }
 
 // --- SCREEN 1: LOGIN (Image 3) ---
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     onGetOtpClick: (String) -> Unit,
@@ -772,6 +903,7 @@ fun LoginScreen(
     }
 }
 // --- SCREEN 2: OTP (Image 4) ---
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OtpScreen(
     email: String,
@@ -877,10 +1009,12 @@ fun OtpScreen(
                                         )
 
                                     if (response.isSuccessful) {
-
-                                        // Save login status
+                                        val body = response.body()
+                                        val tkn = body?.token ?: body?.data?.token ?: body?.data?.accessToken ?: body?.data?.auth_token ?: ""
+                                        // Save login status and token
                                         prefs.edit()
                                             .putBoolean("isLoggedIn", true)
+                                            .putString("token", tkn)
                                             .apply()
 
                                         onVerifyClick()
@@ -945,11 +1079,21 @@ fun OtpScreen(
 // EXISTING CODE (UNCHANGED BELOW THIS LINE, EXCEPT NEEDED REUSABLE FUNCS)
 // -------------------------------------------------------------------------
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NewsDetailScreen(article: NewsArticle) {
-    var showComments by remember { mutableStateOf(false) }
-    val viewModel: NewsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+fun NewsDetailScreen(article: NewsArticle, isLoggedIn: Boolean, onOpenLoginDialog: () -> Unit) {
     val context = LocalContext.current
+    val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+    val token = prefs.getString("token", "") ?: ""
+
+    var showCommentBox by remember { mutableStateOf(false) }
+    var commentText by remember { mutableStateOf("") }
+    val viewModel: NewsViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(article.id) {
+        viewModel.loadComments(article.id)
+    }
 
     Column(
         modifier = Modifier
@@ -988,8 +1132,8 @@ fun NewsDetailScreen(article: NewsArticle) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-            val isLoggedIn = prefs.getBoolean("isLoggedIn", false)
+            // val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+            // val isLoggedIn = prefs.getBoolean("isLoggedIn", false)
 
             // 🔴 ACTION ROW (Share + Bookmark + Comment)
             Row(
@@ -999,34 +1143,25 @@ fun NewsDetailScreen(article: NewsArticle) {
             ) {
 
                 // SHARE
+                // SHARE
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable {
-
-                        val cleanContent = android.text.Html
-                            .fromHtml(article.content, android.text.Html.FROM_HTML_MODE_LEGACY)
-                            .toString()
-
-                        val shareText = article.title + "\n\n" + cleanContent
-
-                        val intent = Intent(Intent.ACTION_SEND)
-                        intent.type = "text/plain"
-                        intent.putExtra(Intent.EXTRA_TEXT, shareText)
-
-                        context.startActivity(
-                            Intent.createChooser(intent, "Share via")
+                        // 🔥 IKKADA KOTHA LOGIC ADD CHESAM
+                        shareNewsDetailWithImage(
+                            context = context,
+                            imageUrl = article.image,
+                            title = article.title,
+                            scope = scope
                         )
                     }
                 ) {
-
                     Icon(
                         Icons.Default.Share,
                         contentDescription = null,
                         tint = BrandRed
                     )
-
                     Spacer(modifier = Modifier.width(6.dp))
-
                     Text(
                         "Share",
                         color = BrandRed,
@@ -1067,20 +1202,11 @@ fun NewsDetailScreen(article: NewsArticle) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable {
-
                         if (!isLoggedIn) {
-
-                            showComments = true
-
+                            onOpenLoginDialog()
                         } else {
-
-                            Toast.makeText(
-                                context,
-                                "Open comment box",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            showCommentBox = !showCommentBox
                         }
-
                     }
                 ){
 
@@ -1101,90 +1227,152 @@ fun NewsDetailScreen(article: NewsArticle) {
 
             }
 
+            if (showCommentBox) {
+                Spacer(modifier = Modifier.height(20.dp))
+                Text("Comments", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Comment Input Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F0F0)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        OutlinedTextField(
+                            value = commentText,
+                            onValueChange = { commentText = it },
+                            modifier = Modifier.fillMaxWidth().height(100.dp),
+                            placeholder = { Text("Write your thoughts...") },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = BrandRed,
+                                unfocusedBorderColor = Color.LightGray,
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White,
+                                cursorColor = BrandRed
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                if (commentText.isNotBlank()) {
+                                    val latestToken = context.getSharedPreferences("auth", android.content.Context.MODE_PRIVATE).getString("token", "") ?: ""
+                                    viewModel.postComment(latestToken, article.id, commentText) { success ->
+                                        if (success) {
+                                            commentText = ""
+                                            android.widget.Toast.makeText(context, "Comment posted successfully!", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            android.widget.Toast.makeText(context, "Failed to post comment. Please try again.", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.align(Alignment.End),
+                            colors = ButtonDefaults.buttonColors(containerColor = BrandRed),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Post Comment", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Comments List
+                viewModel.commentsList.forEach { comment ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF9F9F9)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(comment.user_name ?: "Anonymous", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(comment.comment ?: "", fontSize = 14.sp)
+                            Text(
+                                text = formatDate(comment.created_at ?: ""),
+                                fontSize = 10.sp,
+                                color = TextGray
+                            )
+                        }
+                    }
+                }
+            }
+
         }
     }
 }
 
+// ... (Pina unna imports anni same unchu) ...
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
-    lang: String,
-    isLoggedIn: Boolean,
-    onHeaderVisibilityChange: (Boolean) -> Unit,
+    categories: List<CategoryItem>,
+    onToggleHeader: (Boolean) -> Unit,
     openLogin: () -> Unit
-)
-{
+){
     val context = LocalContext.current
-    var localView by remember { mutableStateOf("Main") }
+    val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+
+    var isLoggedIn by remember { mutableStateOf(prefs.getBoolean("isLoggedIn", false)) }
+
+    // Instant Update Listener
+    DisposableEffect(prefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+            if (key == "isLoggedIn") { isLoggedIn = p.getBoolean("isLoggedIn", false) }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    var localView by rememberSaveable { mutableStateOf("Main") }
 
     BackHandler(enabled = localView != "Main") {
         localView = "Main"
-        onHeaderVisibilityChange(true)
+        onToggleHeader(true)
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
-
         when (localView) {
-
             "Main" -> {
+                LaunchedEffect(Unit) { onToggleHeader(true) }
 
-                LaunchedEffect(Unit) {
-                    onHeaderVisibilityChange(true)
-                }
-
-                if (isLoggedIn) {
-
-                    // LOGIN AYINA TARUVATHA PROFILE UI
-                    LoggedInProfileUI(
-                        onLogout = {
-
-                            val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-
-                            prefs.edit()
-                                .putBoolean("isLoggedIn", false)
-                                .apply()
-
-                        }
-                    )
-
-                } else {
-
-                    // LOGIN KAAPOTHE SIGNIN UI
+                if (!isLoggedIn) {
+                    // 🔥 ERROR FIXED HERE: Parameters ni correct ga pass chesam
                     ProfileMenuView(
-                        onNavigate = {
-                            localView = it
-                            onHeaderVisibilityChange(false)
-                        },
+                        onNavigate = { viewName -> localView = viewName },
+                        onLoginClick = { openLogin() }, // pass openLogin directly
                         onContactClick = {
                             val intent = Intent(Intent.ACTION_SENDTO).apply {
                                 data = Uri.parse("mailto:contact@iqrartimes.com")
                             }
                             context.startActivity(intent)
                         }
-                    ) { openLogin() }
-
+                    )
+                } else {
+                    LoggedProfileView(
+                        onNavigate = { viewName -> localView = viewName },
+                        onLogout = {
+                            prefs.edit().putBoolean("isLoggedIn", false).apply()
+                        }
+                    )
                 }
             }
 
-            "Terms" -> LocalWebViewScreen(
-                title = if (lang == "Hindi") "टर्म्स एंड कंडीशंस" else "Terms & Conditions",
-                url = "https://www.iqrartimes.com/terms-of-service",
-                onBack = {
-                    localView = "Main"
-                    onHeaderVisibilityChange(true)
-                }
-            )
+            "Preferences" -> {
+                PreferencesScreen(
+                    categories = categories,
+                    onBack = { localView = "Main"; onToggleHeader(true) }
+                )
+            }
 
-            "Privacy" -> LocalWebViewScreen(
-                title = if (lang == "Hindi") "प्राइवेसी पॉलिसी" else "Privacy Policy",
-                url = "https://www.iqrartimes.com/privacy-policy",
-                onBack = {
-                    localView = "Main"
-                    onHeaderVisibilityChange(true)
-                }
-            )
+            "Terms" -> LocalWebViewScreen("Terms & Conditions", "https://www.iqrartimes.com/terms-of-service") { localView = "Main" }
+            "Privacy" -> LocalWebViewScreen("Privacy Policy", "https://www.iqrartimes.com/privacy-policy") { localView = "Main" }
         }
     }
 }
+
 
 @Composable
 fun LoggedInProfileUI(onLogout: () -> Unit) {
@@ -1300,30 +1488,47 @@ fun LocalWebViewScreen(title: String, url: String, onBack: () -> Unit) {
             modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, null, tint = BrandRed) }
+            IconButton(onClick = onBack) {
+                Icon(Icons.Default.ArrowBack, null, tint = BrandRed)
+            }
             Text(
-                text = title,
+                title,
                 fontWeight = FontWeight.Bold,
-                color = TextBlack,
                 fontSize = 18.sp,
-                modifier = Modifier.padding(start = 8.dp)
+                modifier = Modifier.padding(start = 8.dp),
+                color = TextBlack
             )
         }
-        HorizontalDivider(color = Color(0xFFEEEEEE), thickness = 1.dp)
-        AndroidView(factory = { context ->
-            WebView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.userAgentString =
-                    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-                webViewClient = WebViewClient()
-                loadUrl(url)
-            }
-        }, modifier = Modifier.fillMaxSize())
+        HorizontalDivider()
+
+        // WebView implementation with all necessary fixes
+        AndroidView(
+            factory = { ctx ->
+                WebView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+
+                    // 🔥 Ee settings valla blank screen raadu, website mobile screen ki fit avthundi
+                    settings.apply {
+                        javaScriptEnabled = true      // JavaScript run avvadaniki
+                        domStorageEnabled = true       // Modern websites load avvadaniki kachitamga undali
+                        databaseEnabled = true
+                        useWideViewPort = true         // Screen size auto adjust avvadaniki
+                        loadWithOverviewMode = true    // Mobile view correctly raavadaniki
+                        javaScriptCanOpenWindowsAutomatically = true
+                    }
+
+                    // Website handling settings
+                    webViewClient = android.webkit.WebViewClient()   // Links open avvadaniki
+                    webChromeClient = android.webkit.WebChromeClient() // Website scripts fast ga run avvadaniki
+
+                    loadUrl(url)
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 
@@ -1570,38 +1775,212 @@ fun LiveTVScreen(
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun EPaperScreen(url: String) {
-    var webView: WebView? by remember { mutableStateOf(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    BackHandler(enabled = webView?.canGoBack() == true) { webView?.goBack() }
-    Box(modifier = Modifier.fillMaxSize()) {
-        AndroidView(factory = { context ->
-            WebView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.userAgentString =
-                    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-                webViewClient = object : WebViewClient() {
-                    override fun onPageStarted(v: WebView?, u: String?, f: Bitmap?) {
-                        isLoading = true
-                    }
+fun EPaperNativeScreen(viewModel: NewsViewModel, lang: String) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val epapers = viewModel.epaperList
+    var currentPageIndex by remember { mutableIntStateOf(0) }
 
-                    override fun onPageFinished(v: WebView?, u: String?) {
-                        isLoading = false
-                    }
+    // 1. DATE STATE
+    val calendar = java.util.Calendar.getInstance()
+    val formatter = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+    var selectedDate by remember { mutableStateOf(formatter.format(calendar.time)) }
+
+    val S3_BASE_URL = "https://iqrar-times.s3.ap-south-1.amazonaws.com/"
+
+    // 🔥 DATE LOGIC: Date select chesinappudu patha data clear ayyi kothadi load avthundi
+    LaunchedEffect(selectedDate, lang) {
+        viewModel.loadEPaper(lang, selectedDate)
+        currentPageIndex = 0 // Reset index to first card
+    }
+
+    val datePickerDialog = android.app.DatePickerDialog(
+        context, { _, year, month, dayOfMonth ->
+            val cal = java.util.Calendar.getInstance()
+            cal.set(year, month, dayOfMonth)
+            selectedDate = formatter.format(cal.time)
+        },
+        calendar.get(java.util.Calendar.YEAR),
+        calendar.get(java.util.Calendar.MONTH),
+        calendar.get(java.util.Calendar.DAY_OF_MONTH)
+    )
+
+    // 🔥 MAIN UI: Column ki vertical scroll ledhu kabatti page fix ga untundi
+    Column(
+        modifier = Modifier.fillMaxSize().background(Color.White)
+    ) {
+        // --- 1. HEADER (Calendar & Actions) ---
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).clickable { datePickerDialog.show() },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.CalendarMonth, null, tint = BrandRed, modifier = Modifier.size(22.dp))
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(text = selectedDate, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+
+            IconButton(onClick = {
+                if (epapers.isNotEmpty()) {
+                    val imgPath = epapers[currentPageIndex].image ?: ""
+                    val finalUrl = if (imgPath.startsWith("http")) imgPath else S3_BASE_URL + imgPath
+                    downloadAndSaveImage(context, finalUrl, scope, isShare = false)
                 }
-                loadUrl(url.trim()); webView = this
+            }) { Icon(Icons.Default.FileDownload, null, modifier = Modifier.size(22.dp)) }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            IconButton(onClick = {
+                if (epapers.isNotEmpty()) {
+                    val imgPath = epapers[currentPageIndex].image ?: ""
+                    val finalUrl = if (imgPath.startsWith("http")) imgPath else S3_BASE_URL + imgPath
+                    downloadAndSaveImage(context, finalUrl, scope, isShare = true)
+                }
+            }) { Icon(Icons.Default.Share, null, modifier = Modifier.size(22.dp)) }
+        }
+
+        HorizontalDivider(thickness = 0.5.dp, color = Color(0xFFEEEEEE))
+
+        // --- 2. BIG NEWS IMAGE (Height Penchaanu mama) ---
+        Box(
+            modifier = Modifier
+                .weight(1f) // 🔥 Idhi middle space motham teesukuni height ni penchuthundi
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 5.dp), // Margins thaggincham size peruguthundi
+            contentAlignment = Alignment.TopCenter
+        ) {
+            if (epapers.isEmpty()) {
+                Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = BrandRed)
+                    Text("Finding news for $selectedDate", modifier = Modifier.padding(top = 10.dp), fontSize = 14.sp)
+                }
+            } else {
+                val currentItem = epapers[currentPageIndex]
+                val imgPath = currentItem.image ?: ""
+                val finalImageUrl = if (imgPath.startsWith("http")) imgPath else S3_BASE_URL + imgPath
+
+                Image(
+                    painter = rememberAsyncImagePainter(model = finalImageUrl),
+                    contentDescription = "News Card",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(4.dp),
+                    contentScale = ContentScale.Fit
+                )
             }
-        })
-        if (isLoading) CircularProgressIndicator(color = BrandRed, modifier = Modifier.align(Alignment.Center))
+        }
+
+        // --- 3. NAVIGATION BUTTONS (Tab bar daggara & Distance pencham) ---
+        if (epapers.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 15.dp, top = 5.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = { if (currentPageIndex > 0) currentPageIndex-- },
+                    enabled = currentPageIndex > 0,
+                    modifier = Modifier.width(110.dp).height(38.dp),
+                    shape = RoundedCornerShape(50),
+                    border = BorderStroke(1.2.dp, if (currentPageIndex > 0) BrandRed else Color.LightGray)
+                ) {
+                    Text("Previous", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
+                }
+
+                // 🔥 DISTANCE: Prev/Next madhya gap ni 100dp ki pencha (Far ga undadaniki)
+                Spacer(modifier = Modifier.width(100.dp))
+
+                Button(
+                    onClick = { if (currentPageIndex < epapers.size - 1) currentPageIndex++ },
+                    enabled = currentPageIndex < epapers.size - 1,
+                    modifier = Modifier.width(110.dp).height(38.dp),
+                    shape = RoundedCornerShape(50),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                    border = BorderStroke(1.2.dp, if (currentPageIndex < epapers.size - 1) BrandRed else Color.LightGray)
+                ) {
+                    Text("Next", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp)) // Bottom Nav space
     }
 }
+
+// 🔥 HELPER FUNCTION: To handle Download & Share
+fun downloadAndSaveImage(context: android.content.Context, url: String, scope: kotlinx.coroutines.CoroutineScope, isShare: Boolean) {
+    val loader = coil.ImageLoader(context)
+    val request = coil.request.ImageRequest.Builder(context).data(url).allowHardware(false).build()
+
+    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        val result = (loader.execute(request) as? coil.request.SuccessResult)?.drawable
+        val bitmap = (result as? android.graphics.drawable.BitmapDrawable)?.bitmap
+
+        if (bitmap != null) {
+            if (isShare) {
+                shareImage(context, bitmap)
+            } else {
+                saveImageToGallery(context, bitmap)
+            }
+        }
+    }
+}
+
+// 🔥 SAVE TO GALLERY LOGIC
+fun saveImageToGallery(context: android.content.Context, bitmap: android.graphics.Bitmap) {
+    val filename = "IqrarEPaper_${System.currentTimeMillis()}.jpg"
+    val contentValues = android.content.ContentValues().apply {
+        put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, filename)
+        put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES)
+    }
+
+    val uri = context.contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+    uri?.let {
+        context.contentResolver.openOutputStream(it).use { stream ->
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, stream!!)
+        }
+        // Show success toast on main thread
+        (context as? android.app.Activity)?.runOnUiThread {
+            android.widget.Toast.makeText(context, "Saved to Gallery!", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+}
+
+// 🔥 SHARE LOGIC
+fun shareImage(context: android.content.Context, bitmap: android.graphics.Bitmap) {
+    try {
+        // 1. Image ni cache lo save chestunnam
+        val cachePath = java.io.File(context.cacheDir, "images")
+        cachePath.mkdirs() // Directory lekapothe srustisthundi
+        val file = java.io.File(cachePath, "shared_news.jpg")
+        val stream = java.io.FileOutputStream(file)
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, stream)
+        stream.close()
+
+        // 2. 🔥 IMPORTANT: Authority kachithamga Manifest lo unnattu ".provider" undali
+        val contentUri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.provider", // <--- IDHI MANIFEST THO MATCH AVVALI
+            file
+        )
+
+        if (contentUri != null) {
+            val shareIntent = android.content.Intent().apply {
+                action = android.content.Intent.ACTION_SEND
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) // Permission ivvali
+                setDataAndType(contentUri, context.contentResolver.getType(contentUri))
+                putExtra(android.content.Intent.EXTRA_STREAM, contentUri)
+                type = "image/jpeg"
+            }
+            context.startActivity(android.content.Intent.createChooser(shareIntent, "Share News Card"))
+        }
+    } catch (e: Exception) {
+        // App crash avvakunda error ni log chesthundi
+        android.util.Log.e("SHARE_ERROR", "Sharing failed: ${e.message}")
+    }
+}
+
+
 
 @Composable
 fun HomeScreen(
@@ -1611,6 +1990,11 @@ fun HomeScreen(
     categories: List<CategoryItem>,
     viewModel: NewsViewModel
 ) {
+    val context = LocalContext.current
+    var showPreferencesScreen by remember { mutableStateOf(false) }
+    var isPreferredMode by remember { mutableStateOf(false) }
+    val prefs = context.getSharedPreferences("user_preferences", Context.MODE_PRIVATE)
+    val savedCategories = prefs.getStringSet("selected_categories", emptySet()) ?: emptySet()
     // Local loader state
     var showLoader by remember { mutableStateOf(true) }
 
@@ -1623,7 +2007,14 @@ fun HomeScreen(
     }
 
     val newsList = viewModel.newsList
-    val latestNews = newsList.firstOrNull()
+    val filteredNews = if (isPreferredMode && savedCategories.isNotEmpty()) {
+        newsList.filter { news ->
+            news.categories?.any { it in savedCategories } == true
+        }
+    } else {
+        newsList
+    }
+    val latestNews = filteredNews.firstOrNull()
 
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
 
@@ -1656,6 +2047,7 @@ fun HomeScreen(
                             onClick = {
                                 onNewsClick(
                                     NewsArticle(
+                                        news.id ?: "",
                                         news.name ?: "",
                                         news.icon,
                                         news.date ?: "",
@@ -1681,6 +2073,7 @@ fun HomeScreen(
                         onClick = {
                             onNewsClick(
                                 NewsArticle(
+                                    news.id ?: "",
                                     news.name ?: "",
                                     news.icon,
                                     news.date ?: "",
@@ -1705,6 +2098,7 @@ fun HomeScreen(
                         onClick = {
                             onNewsClick(
                                 NewsArticle(
+                                    news.id ?: "",
                                     news.name ?: "",
                                     news.icon,
                                     news.date ?: "",
@@ -1791,6 +2185,7 @@ fun CategoryNewsScreen(
                         onClick = {
                             onNewsClick(
                                 NewsArticle(
+                                    item.id ?: "",
                                     item.name ?: "",
                                     item.image?.firstOrNull() ?: "",
                                     item.date ?: "",
@@ -2106,5 +2501,56 @@ fun ToggleNewsScreen(
 
         }
 
+    }
+}
+
+// 🔥 Idhi file chivarlo (bayata) add chey mama
+fun shareNewsDetailWithImage(
+    context: android.content.Context,
+    imageUrl: String,
+    title: String,
+    scope: kotlinx.coroutines.CoroutineScope
+) {
+    val loader = coil.ImageLoader(context)
+    val request = coil.request.ImageRequest.Builder(context)
+        .data(imageUrl)
+        .allowHardware(false)
+        .build()
+
+    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val result = (loader.execute(request) as? coil.request.SuccessResult)?.drawable
+            val bitmap = (result as? android.graphics.drawable.BitmapDrawable)?.bitmap
+
+            if (bitmap != null) {
+                // 1. Image ni cache lo save chestunnam
+                val cachePath = java.io.File(context.cacheDir, "images")
+                cachePath.mkdirs()
+                val file = java.io.File(cachePath, "shared_news_detail.jpg")
+                val stream = java.io.FileOutputStream(file)
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, stream)
+                stream.close()
+
+                // 2. URI create chesthunnam (Manifest lo unnattu ".provider" undali)
+                val contentUri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.provider", // Manifest authority ki match chesam
+                    file
+                )
+
+                // 3. Share sheet open chesthunnam (Image + Text)
+                val shareIntent = android.content.Intent().apply {
+                    action = android.content.Intent.ACTION_SEND
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    setDataAndType(contentUri, "image/jpeg")
+                    putExtra(android.content.Intent.EXTRA_STREAM, contentUri) // Image stream
+                    putExtra(android.content.Intent.EXTRA_TEXT, title)        // 🔥 News Title Text
+                    type = "image/jpeg"
+                }
+                context.startActivity(android.content.Intent.createChooser(shareIntent, "Share News"))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("SHARE_ERROR", "Sharing failed: ${e.message}")
+        }
     }
 }

@@ -6,6 +6,7 @@ import retrofit2.http.POST
 import retrofit2.http.Body
 import retrofit2.http.Query
 import com.example.iqrarnewscompose.CategoryResponse
+import retrofit2.http.Header
 
 // ------------------------------------
 // API SERVICE INTERFACE
@@ -58,6 +59,19 @@ interface ApiService {
     suspend fun getNewsComments(
         @Query("news_id") newsId: String
     ): Response<CommentResponse>
+
+    @POST("news/news/comment")
+    suspend fun postComment(
+        @Header("Authorization") token: String,
+        @Body request: PostCommentRequest
+    ): Response<CommonResponse>
+
+    // 🔥 ఇక్కడ మార్పు చేశాను - పాత లైన్ ని దీనితో రీప్లేస్ చేశాను
+    @GET("backoffice/epaper")
+    suspend fun getEPaper(
+        @Query("language") language: String,
+        @Query("date") date: String
+    ): Response<EPaperListResponse>
 }
 
 
@@ -75,6 +89,11 @@ data class VerifyOtpRequest(
     val otp: String
 )
 
+data class PostCommentRequest(
+    val news_id: String,
+    val comment: String
+)
+
 
 // ------------------------------------
 // COMMON RESPONSE MODEL
@@ -83,7 +102,14 @@ data class VerifyOtpRequest(
 data class CommonResponse(
     val success: Boolean? = null,
     val message: String? = null,
-    val token: String? = null
+    val token: String? = null,
+    val data: TokenData? = null
+)
+
+data class TokenData(
+    val token: String? = null,
+    val accessToken: String? = null,
+    val auth_token: String? = null
 )
 
 data class CommentResponse(
