@@ -16,32 +16,23 @@ class NewsViewModel : ViewModel() {
     val newsList = mutableStateListOf<ApiNewsArticle>()
     val categories = mutableStateListOf<CategoryItem>()
     val commentsList = mutableStateListOf<Comment>()
-
-    // 🔥 KOTHA LINE: E-Paper data store cheskovadaniki
     val epaperList = mutableStateListOf<com.example.iqrarnewscompose.api.EPaperItem>()
 
     var isLoading = mutableStateOf(false)
-
     private val newsCache = mutableMapOf<String, List<ApiNewsArticle>>()
 
     fun loadCategories(lang: String) {
         viewModelScope.launch {
             try {
                 val response = repo.fetchCategories(lang)
-
-                // 🔥 SORTING LOGIC
                 val priorityCategories = response.data
                     .filter { it.priority!! > 0 }
                     .sortedBy { it.priority }
-
                 val zeroPriorityCategories = response.data
                     .filter { it.priority == 0 }
-
                 val finalSortedCategories = priorityCategories + zeroPriorityCategories
-
                 categories.clear()
                 categories.addAll(finalSortedCategories)
-
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -50,29 +41,23 @@ class NewsViewModel : ViewModel() {
 
     fun loadNews(category: String, langParam: String, onDataLoaded: () -> Unit = {}) {
         viewModelScope.launch {
-
             val cacheKey = "$category-$langParam"
-
             if (newsCache.containsKey(cacheKey)) {
                 newsList.clear()
                 newsList.addAll(newsCache[cacheKey]!!)
                 onDataLoaded()
                 return@launch
             }
-
             try {
                 isLoading.value = true
                 newsList.clear()
-
                 val data = if (category == "Home" || category == "HOME" || category == "") {
                     repo.getAllNews(langParam)
                 } else {
                     repo.getNewsByCategory(category, langParam)
                 }
-
                 newsCache[cacheKey] = data
                 newsList.addAll(data)
-
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
@@ -83,7 +68,6 @@ class NewsViewModel : ViewModel() {
     }
 
     fun loadNewsSeparate(category: String, onDataLoaded: (List<ApiNewsArticle>) -> Unit) {
-
         viewModelScope.launch {
             try {
                 val data = repo.getAllNews("HINDI")
@@ -92,13 +76,13 @@ class NewsViewModel : ViewModel() {
                 onDataLoaded(emptyList())
             }
         }
-
     }
 
-    fun loadComments(newsId: String) {
+    // ✅ Signature fixed
+    fun loadComments(token: String, newsId: String) {
         viewModelScope.launch {
             try {
-                val data = repo.fetchComments(newsId)
+                val data = repo.fetchComments(token, newsId)
                 commentsList.clear()
                 commentsList.addAll(data)
             } catch (e: Exception) {
@@ -107,12 +91,13 @@ class NewsViewModel : ViewModel() {
         }
     }
 
+    // ✅ FIXED: Passing token to loadComments after posting
     fun postComment(token: String, newsId: String, comment: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
             try {
                 val success = repo.postComment(token, newsId, comment)
                 if (success) {
-                    loadComments(newsId) // Refresh comments
+                    loadComments(token, newsId) // 🔥 Huna token kuda pass cheyali ikkada
                 }
                 onResult(success)
             } catch (e: Exception) {
@@ -121,16 +106,12 @@ class NewsViewModel : ViewModel() {
         }
     }
 
-    //  KOTHA FUNCTION: E-Paper data techukovadaniki
     fun loadEPaper(lang: String, date: String) {
         viewModelScope.launch {
             try {
                 epaperList.clear()
                 val data = repo.fetchEPaper(lang, date)
-
-                // 🔥 ఇక్కడ ఫిల్టర్ యాడ్ చేశాను - సర్వర్ మొత్తం పంపినా, మనం అడిగిన డేట్ మాత్రమే తీసుకుంటాం
                 val filteredData = data.filter { it.date == date }
-
                 epaperList.addAll(filteredData)
             } catch (e: Exception) {
                 e.printStackTrace()

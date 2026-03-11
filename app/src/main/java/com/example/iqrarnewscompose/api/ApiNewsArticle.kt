@@ -33,6 +33,7 @@ data class ApiNewsArticle(
 
 ) {
 
+
     val category_name: String
         get() = categories?.firstOrNull() ?: ""
 

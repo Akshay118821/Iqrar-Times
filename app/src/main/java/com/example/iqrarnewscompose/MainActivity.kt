@@ -71,8 +71,10 @@ import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import android.graphics.drawable.BitmapDrawable
+import com.example.iqrarnewscompose.profile.ProfileGridItem
 import java.io.File
 import java.io.FileOutputStream
+import androidx.compose.foundation.shape.CircleShape
 
 // Data Model
 data class NewsArticle(
@@ -227,11 +229,22 @@ fun MainApp(viewModel: NewsViewModel) {
                     onDismiss = { showLoginDialog = false },
                     onLoginSuccess = { result ->
                         isLoggedIn = true
-                        val tkn = result.token ?: result.data?.token ?: result.data?.accessToken ?: result.data?.auth_token ?: ""
+
+                        // 🔥 UPDATED TOKEN EXTRACTION
+                        val tkn = result.data?.access          // Try 'access' first
+                            ?: result.data?.token
+                            ?: result.data?.accessToken
+                            ?: result.data?.auth_token
+                            ?: result.token
+                            ?: ""
+
+                        Log.d("TOKEN_SAVE", "Saving Token: ${tkn.take(50)}")
+
                         prefs.edit()
                             .putBoolean("isLoggedIn", true)
                             .putString("token", tkn)
                             .apply()
+
                         showLoginDialog = false
                     }
                 )
@@ -293,6 +306,7 @@ fun MainContent(
     var showLanguageMenu by remember { mutableStateOf(false) }
     var isMainHeaderVisible by remember { mutableStateOf(true) }
     var selectedArticle by remember { mutableStateOf<NewsArticle?>(null) }
+    var showCommentsFor by remember { mutableStateOf<NewsArticle?>(null) }
 
     var isFlipMode by remember { mutableStateOf(false) }
     var currentFlipPage by remember { mutableIntStateOf(0) }
@@ -311,8 +325,10 @@ fun MainContent(
         viewModel.loadCategories(langParam)
     }
 
-    BackHandler(enabled = selectedArticle != null || isFlipMode) {
-        if (selectedArticle != null) {
+    BackHandler(enabled = selectedArticle != null || isFlipMode || showCommentsFor != null) {
+        if (showCommentsFor != null) {
+            showCommentsFor = null // Comments close chestundi
+        } else if (selectedArticle != null) {
             selectedArticle = null
             if (!isFlipMode) isMainHeaderVisible = true
         } else if (isFlipMode) {
@@ -448,8 +464,21 @@ fun MainContent(
         val boxModifier = if (isFlipMode) Modifier.fillMaxSize() else Modifier.padding(innerPadding)
 
         Box(modifier = boxModifier) {
-            if (selectedArticle != null) {
-                NewsDetailScreen(article = selectedArticle!!, isLoggedIn = isLoggedIn, onOpenLoginDialog = openLoginDialog)
+            if (showCommentsFor != null) {
+                //  Idhi kotha screen ni chupisthundi
+                CommentsSectionScreen(
+                    article = showCommentsFor!!,
+                    viewModel = viewModel,
+                    onBack = { showCommentsFor = null }
+                )
+            } else if (selectedArticle != null) {
+                //  News Detail screen ki kotha parameter pass chesthunnam
+                NewsDetailScreen(
+                    article = selectedArticle!!,
+                    isLoggedIn = isLoggedIn,
+                    onOpenLoginDialog = openLoginDialog,
+                    onCommentClick = { showCommentsFor = it } // Idhi click chesthe state marusthundi
+                )
             }
             else if (isFlipMode) {
                 FlipNewsScreen(
@@ -769,8 +798,8 @@ fun LoginScreen(
                     painter = painterResource(id = R.drawable.logo),
                     contentDescription = "Logo",
                     modifier = Modifier.width(200.dp),
-                    contentScale = ContentScale.Fit
-                )
+
+                    )
             }
 
             // WHITE AREA
@@ -1010,7 +1039,14 @@ fun OtpScreen(
 
                                     if (response.isSuccessful) {
                                         val body = response.body()
-                                        val tkn = body?.token ?: body?.data?.token ?: body?.data?.accessToken ?: body?.data?.auth_token ?: ""
+                                        val tkn = body?.data?.access
+                                            ?: body?.data?.token
+                                            ?: body?.data?.accessToken
+                                            ?: body?.data?.auth_token
+                                            ?: body?.token
+                                            ?: ""
+
+                                        Log.d("OTP_TOKEN", "Extracted Token: ${tkn.take(50)}")
                                         // Save login status and token
                                         prefs.edit()
                                             .putBoolean("isLoggedIn", true)
@@ -1081,7 +1117,12 @@ fun OtpScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NewsDetailScreen(article: NewsArticle, isLoggedIn: Boolean, onOpenLoginDialog: () -> Unit) {
+fun NewsDetailScreen(
+    article: NewsArticle,
+    isLoggedIn: Boolean,
+    onOpenLoginDialog: () -> Unit,
+    onCommentClick: (NewsArticle) -> Unit // 🔥 Idhi add cheyali
+) {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
     val token = prefs.getString("token", "") ?: ""
@@ -1092,7 +1133,10 @@ fun NewsDetailScreen(article: NewsArticle, isLoggedIn: Boolean, onOpenLoginDialo
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(article.id) {
-        viewModel.loadComments(article.id)
+        val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+        val token = prefs.getString("token", "") ?: ""
+
+        viewModel.loadComments(token, article.id)
     }
 
     Column(
@@ -1205,7 +1249,8 @@ fun NewsDetailScreen(article: NewsArticle, isLoggedIn: Boolean, onOpenLoginDialo
                         if (!isLoggedIn) {
                             onOpenLoginDialog()
                         } else {
-                            showCommentBox = !showCommentBox
+                            // 🔥 Ippudu idhi kotha screen ki pampisthundi
+                            onCommentClick(article)
                         }
                     }
                 ){
@@ -1351,7 +1396,7 @@ fun ProfileScreen(
                         }
                     )
                 } else {
-                    LoggedProfileView(
+                    LoggedInProfileUI(
                         onNavigate = { viewName -> localView = viewName },
                         onLogout = {
                             prefs.edit().putBoolean("isLoggedIn", false).apply()
@@ -1369,13 +1414,14 @@ fun ProfileScreen(
 
             "Terms" -> LocalWebViewScreen("Terms & Conditions", "https://www.iqrartimes.com/terms-of-service") { localView = "Main" }
             "Privacy" -> LocalWebViewScreen("Privacy Policy", "https://www.iqrartimes.com/privacy-policy") { localView = "Main" }
+            "About" -> LocalWebViewScreen("About Us", "https://www.iqrartimes.com/about") { localView = "Main" }
         }
     }
 }
 
 
 @Composable
-fun LoggedInProfileUI(onLogout: () -> Unit) {
+fun LoggedInProfileUI(onNavigate: (String) -> Unit, onLogout: () -> Unit) {
 
     Column(
         modifier = Modifier
@@ -1421,8 +1467,9 @@ fun LoggedInProfileUI(onLogout: () -> Unit) {
 
             ProfileGridItem(Icons.Default.Settings,"Preferences",Modifier.weight(1f))
 
-            ProfileGridItem(Icons.Default.Info,"About",Modifier.weight(1f))
-
+            ProfileGridItem(Icons.Default.Info, "About", Modifier.weight(1f)) {
+                onNavigate("About")
+            }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -1441,9 +1488,14 @@ fun LoggedInProfileUI(onLogout: () -> Unit) {
 }
 
 @Composable
-fun ProfileGridItem(icon: ImageVector, text: String, modifier: Modifier = Modifier) {
+fun ProfileGridItem(
+    icon: ImageVector,
+    text: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {} // 🔥 Idhi kothaga add chesam
+) {
     OutlinedButton(
-        onClick = { },
+        onClick = onClick, // 🔥 Ikkada empty badulu 'onClick' pettu
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
         modifier = modifier.height(65.dp),
@@ -1779,7 +1831,9 @@ fun LiveTVScreen(
 fun EPaperNativeScreen(viewModel: NewsViewModel, lang: String) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val epapers = viewModel.epaperList
+
+    val epapers = viewModel.epaperList.reversed()  // 🔥 Just add .reversed() here
+
     var currentPageIndex by remember { mutableIntStateOf(0) }
 
     // 1. DATE STATE
@@ -1864,7 +1918,7 @@ fun EPaperNativeScreen(viewModel: NewsViewModel, lang: String) {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(4.dp),
-                    contentScale = ContentScale.Fit
+
                 )
             }
         }
@@ -2551,6 +2605,325 @@ fun shareNewsDetailWithImage(
             }
         } catch (e: Exception) {
             android.util.Log.e("SHARE_ERROR", "Sharing failed: ${e.message}")
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CommentsSectionScreen(
+    article: NewsArticle,
+    viewModel: NewsViewModel,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    var commentText by remember { mutableStateOf("") }
+    var isPosting by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    // 🔥 Refresh trigger - KEY PART
+    var refreshKey by remember { mutableIntStateOf(0) }
+
+    // 🔥 Comments load - refreshKey change ayithe reload
+    LaunchedEffect(article.id, refreshKey) {
+        isLoading = true
+        val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+        val token = prefs.getString("token", "") ?: ""
+        viewModel.loadComments(token, article.id)
+        delay(500)
+        isLoading = false
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .statusBarsPadding()
+    ) {
+        // --- 1. HEADER ---
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.Black
+                )
+            }
+
+            Text(
+                text = "Comments",
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+
+            // 🔥 REFRESH BUTTON - Other users comments load cheyadaniki
+            IconButton(onClick = { refreshKey++ }) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = "Refresh",
+                    tint = BrandRed
+                )
+            }
+        }
+
+        // --- 2. ARTICLE TITLE ---
+        Text(
+            text = article.title,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black,
+            modifier = Modifier.padding(horizontal = 20.dp),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "${viewModel.commentsList.size} Comments",
+            fontSize = 14.sp,
+            color = Color.Gray,
+            modifier = Modifier.padding(horizontal = 20.dp)
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        HorizontalDivider(color = Color(0xFFEEEEEE))
+
+        // --- 3. COMMENTS LIST ---
+        when {
+            isLoading -> {
+                // Loading State
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = BrandRed)
+                }
+            }
+
+            viewModel.commentsList.isEmpty() -> {
+                // Empty State
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Default.ChatBubbleOutline,
+                            contentDescription = null,
+                            tint = Color.LightGray,
+                            modifier = Modifier.size(70.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "No comments yet",
+                            color = Color.Gray,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Be the first to comment!",
+                            color = Color.LightGray,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+
+            else -> {
+                // Comments List
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 20.dp)
+                ) {
+                    items(viewModel.commentsList) { comment ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 14.dp)
+                        ) {
+                            // Avatar with first letter
+                            Surface(
+                                modifier = Modifier.size(42.dp),
+                                shape = CircleShape,
+                                color = BrandRed.copy(alpha = 0.1f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = (comment.user_name?.firstOrNull() ?: 'U')
+                                            .uppercase()
+                                            .toString(),
+                                        color = BrandRed,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(14.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = comment.user_name ?: "Anonymous",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = Color.Black
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "• ${getTimeAgo(comment.created_at)}",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Text(
+                                    text = comment.comment ?: "",
+                                    fontSize = 14.sp,
+                                    color = Color(0xFF444444),
+                                    lineHeight = 20.sp
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(color = Color(0xFFF5F5F5))
+                    }
+
+                    // Bottom spacing
+                    item {
+                        Spacer(modifier = Modifier.height(20.dp))
+                    }
+                }
+            }
+        }
+
+        // --- 4. COMMENT INPUT BOX (Bottom Fixed) ---
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shadowElevation = 12.dp,
+            color = Color.White
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Text Input
+                OutlinedTextField(
+                    value = commentText,
+                    onValueChange = { commentText = it },
+                    placeholder = {
+                        Text(
+                            "Write a comment...",
+                            color = Color.Gray,
+                            fontSize = 14.sp
+                        )
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 50.dp, max = 120.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFFF5F5F5),
+                        unfocusedContainerColor = Color(0xFFF5F5F5),
+                        unfocusedBorderColor = Color.Transparent,
+                        focusedBorderColor = BrandRed.copy(alpha = 0.5f),
+                        cursorColor = BrandRed
+                    ),
+                    maxLines = 4,
+                    singleLine = false
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // 🔥 SEND BUTTON with Loading
+                Button(
+                    onClick = {
+                        if (commentText.isNotBlank() && !isPosting) {
+                            isPosting = true
+                            val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+                            val token = prefs.getString("token", "") ?: ""
+
+                            // 🔥 DEBUG LOGS - Idhi add chesanu (functionality touch kaaledu)
+                            Log.d("COMMENT_DEBUG", "========== COMMENT POST START ==========")
+                            Log.d("COMMENT_DEBUG", "Token Empty: ${token.isEmpty()}")
+                            Log.d("COMMENT_DEBUG", "Token Length: ${token.length}")
+                            Log.d("COMMENT_DEBUG", "Token First 30 chars: ${token.take(30)}")
+                            Log.d("COMMENT_DEBUG", "Article ID: ${article.id}")
+                            Log.d("COMMENT_DEBUG", "Comment Text: $commentText")
+                            Log.d("COMMENT_DEBUG", "============================================")
+
+                            viewModel.postComment(token, article.id, commentText) { success ->
+                                isPosting = false
+
+                                // 🔥 DEBUG LOG - Success status
+                                Log.d("COMMENT_DEBUG", "POST Result - Success: $success")
+
+                                if (success) {
+                                    commentText = ""
+                                    refreshKey++ // 🔥 Idhi GET API call trigger chesthundi
+                                    Toast.makeText(
+                                        context,
+                                        "Comment posted!",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "Failed! Try again",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+                    },
+                    enabled = commentText.isNotBlank() && !isPosting,
+                    modifier = Modifier.size(52.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BrandRed,
+                        disabledContainerColor = Color.LightGray
+                    ),
+                    contentPadding = PaddingValues(0.dp),
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 4.dp
+                    )
+                ) {
+                    if (isPosting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Send,
+                            contentDescription = "Send",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }

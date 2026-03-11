@@ -13,24 +13,46 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin // 🔥 Swift's anchorPoint equivalent
-import androidx.compose.ui.graphics.graphicsLayer // 🔥 Swift's CATransform3D equivalent
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
+import kotlin.math.absoluteValue
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlin.math.absoluteValue
+
+// 🔥 TIME AGO HELPER
+fun getTimeAgo(dateString: String?): String {
+    if (dateString.isNullOrEmpty()) return "Just now"
+    return try {
+        val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+        format.timeZone = TimeZone.getTimeZone("UTC")
+        val past = format.parse(dateString) ?: return "Just now"
+        val now = Date()
+        val diffInSeconds = (now.time - past.time) / 1000
+        val diffInMinutes = diffInSeconds / 60
+        val diffInHours = diffInMinutes / 60
+        val diffInDays = diffInHours / 24
+
+        when {
+            diffInSeconds < 60 -> "Just now"
+            diffInMinutes < 60 -> "${diffInMinutes}m ago"
+            diffInHours < 24 -> "${diffInHours}h ago"
+            else -> "${diffInDays}d ago"
+        }
+    } catch (e: Exception) { "Just now" }
+}
 
 @Composable
 fun FlipNewsScreen(
@@ -47,13 +69,8 @@ fun FlipNewsScreen(
 
     val allNews = viewModel.newsList
     val filteredNews = remember(allNews, savedCategories) {
-        if (savedCategories.isEmpty()) {
-            allNews
-        } else {
-            allNews.filter { news ->
-                // వార్తకు ఉన్న categories లిస్ట్ లో మన saved ID ఉందో లేదో చూస్తుంది
-                news.categories?.any { it in savedCategories } == true
-            }
+        if (savedCategories.isEmpty()) allNews else allNews.filter { news ->
+            news.categories?.any { it in savedCategories } == true
         }
     }
 
@@ -61,104 +78,98 @@ fun FlipNewsScreen(
         if (filteredNews.isEmpty()) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = BrandRed)
         } else {
-            val pagerState = rememberPagerState(
-                initialPage = initialPage,
-                pageCount = { filteredNews.size }
-            )
+            val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { filteredNews.size })
 
-            LaunchedEffect(pagerState.currentPage) {
-                onPageChange(pagerState.currentPage)
-            }
+            LaunchedEffect(pagerState.currentPage) { onPageChange(pagerState.currentPage) }
 
-            VerticalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = 1
-            ) { page ->
+            VerticalPager(state = pagerState, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
                 val news = filteredNews[page]
-
-                // 🔥 SWIFT EXTRACTED LOGIC: Calculate page offset
                 val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+                val progress = pageOffset.absoluteValue.coerceIn(0f, 1f)
+                val isScrollingToNext = pageOffset > 0
+                val isScrollingToPrev = pageOffset < 0
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            // 1. Swift logic: angle = progress * .pi (180 degrees)
-                            val rotation = pageOffset * -180f
-                            rotationX = rotation.coerceIn(-180f, 180f)
-
-                            // 2. Swift logic: anchorPoint (TransformOrigin)
-                            // Page moving up -> Pivot at Top (0f). Page coming from bottom -> Pivot at Bottom (1f)
-                            transformOrigin = TransformOrigin(
-                                pivotFractionX = 0.5f,
-                                pivotFractionY = if (pageOffset > 0) 0f else 1f
-                            )
-
-                            // 3. Swift logic: m34 perspective depth
-                            cameraDistance = 16 * density
-
-                            // 4. Swift logic: front/back visibility (Halfway flip)
-                            // If rotation > 90 degrees, hide the card to reveal the one behind
-                            alpha = if (rotation.absoluteValue > 90f) 0f else 1f
-
-                            // 5. Translation to keep the card centered during the flip
-                            translationY = pageOffset * size.height
-                        }
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            onScreenTap()
-                        }
-                ) {
-                    // --- NEWS CARD UI ---
+                Box(modifier = Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onScreenTap() }) {
                     Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
-                        Image(
-                            painter = rememberAsyncImagePainter(news.icon),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxWidth().weight(0.4f),
-                            contentScale = ContentScale.Crop
-                        )
 
-                        // Red Strip
-                        Box(modifier = Modifier.fillMaxWidth().background(BrandRed).padding(horizontal = 16.dp, vertical = 6.dp)) {
-                            Text(text = "IQRAR TIMES", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black, fontStyle = FontStyle.Italic)
+                        // TOP HALF
+                        Box(modifier = Modifier.fillMaxWidth().weight(0.5f).graphicsLayer {
+                            if (isScrollingToPrev && page == pagerState.currentPage + 1) {
+                                rotationX = -progress * 180f
+                                transformOrigin = TransformOrigin(0.5f, 1f)
+                                cameraDistance = 16 * density
+                                alpha = if (progress > 0.5f) 0f else 1f
+                            }
+                        }.shadow(elevation = if (progress > 0 && progress < 1) (progress * 16).dp else 0.dp, clip = false)
+                            .drawWithContent {
+                                drawContent()
+                                if (isScrollingToNext && page == pagerState.currentPage) {
+                                    drawRect(Color.Black.copy(alpha = progress * 0.15f))
+                                }
+                            }) {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                Image(painter = rememberAsyncImagePainter(news.icon), contentDescription = null, modifier = Modifier.fillMaxWidth().weight(0.8f), contentScale = ContentScale.Crop)
+                                Box(modifier = Modifier.fillMaxWidth().background(BrandRed).padding(horizontal = 16.dp, vertical = 6.dp)) {
+                                    Text(text = "IQRAR TIMES", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black, fontStyle = FontStyle.Italic)
+                                }
+                            }
                         }
 
-                        // Content
-                        Column(modifier = Modifier.fillMaxWidth().weight(0.6f).padding(16.dp)) {
-                            Text(text = (news.name ?: "") + "..", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.Black, lineHeight = 28.sp, maxLines = 3)
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            // Relative Time
-
-
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // More... Logic
-                            val cleanDesc = android.text.Html.fromHtml(news.content ?: "", 0).toString()
-                            val annotatedString = buildAnnotatedString {
-                                val limit = 800
-                                append(if (cleanDesc.length > limit) cleanDesc.take(limit) else cleanDesc)
-                                pushStringAnnotation(tag = "NAV", annotation = "more")
-                                withStyle(style = SpanStyle(color = BrandRed, fontWeight = FontWeight.Black, fontStyle = FontStyle.Italic)) {
-                                    append(" more...")
-                                }
-                                pop()
+                        // BOTTOM HALF
+                        Box(modifier = Modifier.fillMaxWidth().weight(0.5f).graphicsLayer {
+                            if (isScrollingToNext && page == pagerState.currentPage) {
+                                rotationX = progress * 180f
+                                transformOrigin = TransformOrigin(0.5f, 0f)
+                                cameraDistance = 16 * density
+                                alpha = if (progress > 0.5f) 0f else 1f
                             }
-
-                            ClickableText(
-                                text = annotatedString,
-                                style = TextStyle(fontSize = 16.sp, color = Color(0xFF333333), lineHeight = 24.sp),
-                                maxLines = 15,
-                                overflow = TextOverflow.Ellipsis,
-                                onClick = { offset ->
-                                    annotatedString.getStringAnnotations(tag = "NAV", start = offset, end = offset)
-                                        .firstOrNull()?.let { onNewsClick(news) } ?: onScreenTap()
+                        }.shadow(elevation = if (progress > 0 && progress < 1) (progress * 16).dp else 0.dp, clip = false)
+                            .drawWithContent {
+                                drawContent()
+                                if (isScrollingToPrev && page == pagerState.currentPage + 1) {
+                                    drawRect(Color.Black.copy(alpha = progress * 0.15f))
                                 }
-                            )
+                            }) {
+                            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                Text(text = (news.name ?: "") + "..", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.Black, lineHeight = 28.sp, maxLines = 3)
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                val cleanDesc = android.text.Html.fromHtml(news.content ?: "", 0).toString()
+                                val annotatedString = buildAnnotatedString {
+                                    val limit = 550
+                                    append(if (cleanDesc.length > limit) cleanDesc.take(limit) + "..." else cleanDesc)
+                                }
+
+                                ClickableText(
+                                    text = annotatedString,
+                                    style = TextStyle(fontSize = 16.sp, color = Color(0xFF333333), lineHeight = 24.sp),
+                                    maxLines = 10,
+                                    overflow = TextOverflow.Ellipsis,
+                                    onClick = { onScreenTap() }
+                                )
+
+                                Spacer(modifier = Modifier.weight(1f))
+
+                                // 🔥 FOOTER: Time Ago and Read More
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Ikkada 'news.date' ani petta mama, nee backend date field idi.
+                                    Text(
+                                        text = getTimeAgo(news.date),
+                                        style = TextStyle(color = Color.Gray, fontSize = 12.sp)
+                                    )
+
+                                    Text(
+                                        text = "Read More",
+                                        modifier = Modifier.clickable { onNewsClick(news) },
+                                        style = TextStyle(color = BrandRed, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }

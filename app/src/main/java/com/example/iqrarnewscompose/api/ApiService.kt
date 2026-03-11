@@ -57,6 +57,7 @@ interface ApiService {
 
     @GET("news/news/comment")
     suspend fun getNewsComments(
+        @Header("Authorization") token: String,    //  ADD THIS
         @Query("news_id") newsId: String
     ): Response<CommentResponse>
 
@@ -109,7 +110,9 @@ data class CommonResponse(
 data class TokenData(
     val token: String? = null,
     val accessToken: String? = null,
-    val auth_token: String? = null
+    val auth_token: String? = null,
+    val access: String? = null,        //  ADD THIS LINE
+    val refresh: String? = null        //  ADD THIS LINE
 )
 
 data class CommentResponse(

@@ -58,9 +58,10 @@ class NewsRepository {
     suspend fun fetchCategories(lang: String) =
         api.getCategories(lang)
 
-    suspend fun fetchComments(newsId: String): List<Comment> {
+    // ✅ FIXED: Takes token now
+    suspend fun fetchComments(token: String, newsId: String): List<Comment> {
         return try {
-            val response = api.getNewsComments(newsId)
+            val response = api.getNewsComments("Bearer $token", newsId)
             if (response.isSuccessful) {
                 response.body()?.data ?: emptyList()
             } else {
@@ -80,10 +81,9 @@ class NewsRepository {
         }
     }
 
-    // 🔥 ఇక్కడ మార్పు చేశాను - ఎర్రర్ రాకుండా 'date' ని కూడా యాడ్ చేశాను
+    // ✅ FIXED: Restored fetchEPaper which was accidentally deleted
     suspend fun fetchEPaper(lang: String, date: String): List<EPaperItem> {
         return try {
-            // పైన పారామీటర్ లో ఉన్న 'date' ని ఇక్కడ api కి పంపిస్తున్నాం
             val response = api.getEPaper(lang, date)
             if (response.isSuccessful) {
                 response.body()?.data ?: emptyList()
