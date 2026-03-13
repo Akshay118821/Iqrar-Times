@@ -92,10 +92,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
-        //  1. Install Splash Screen (Must be first)
+        //  1. Install Splash Screen
         val splashScreen = installSplashScreen()
 
         super.onCreate(savedInstanceState)
+
+        // Permission Logic
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             requestPermissions(
                 arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
@@ -103,31 +105,20 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        // FCM Logic
         FirebaseMessaging.getInstance().token
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
-                    val token = task.result
-                    Log.d("FCM_TOKEN", token)
+                    Log.d("FCM_TOKEN", task.result)
                 }
             }
 
+        // Data Loading (Background lo jaruguthundi)
         viewModel.loadCategories("HINDI")
-
-        var isDataLoaded = false
-
-        // Start loading news immediately
-        viewModel.loadNews("", "HINDI") {
-            isDataLoaded = true
-        }
-
-        val startTime = System.currentTimeMillis()
+        viewModel.loadNews("", "HINDI") {}
 
 
-        splashScreen.setKeepOnScreenCondition {
-
-            val isTakingTooLong = (System.currentTimeMillis() - startTime) > 1000
-            (!isDataLoaded && !isTakingTooLong)
-        }
+        splashScreen.setKeepOnScreenCondition { false }
 
         setContent {
             IqrarNewsComposeTheme {
@@ -1111,9 +1102,6 @@ fun OtpScreen(
 }
 
 
-// -------------------------------------------------------------------------
-// EXISTING CODE (UNCHANGED BELOW THIS LINE, EXCEPT NEEDED REUSABLE FUNCS)
-// -------------------------------------------------------------------------
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1121,7 +1109,7 @@ fun NewsDetailScreen(
     article: NewsArticle,
     isLoggedIn: Boolean,
     onOpenLoginDialog: () -> Unit,
-    onCommentClick: (NewsArticle) -> Unit // 🔥 Idhi add cheyali
+    onCommentClick: (NewsArticle) -> Unit
 ) {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
@@ -1133,9 +1121,6 @@ fun NewsDetailScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(article.id) {
-        val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-        val token = prefs.getString("token", "") ?: ""
-
         viewModel.loadComments(token, article.id)
     }
 
@@ -1157,6 +1142,7 @@ fun NewsDetailScreen(
 
         Column(modifier = Modifier.padding(16.dp)) {
 
+            // 1. TITLE
             Text(
                 text = article.title,
                 fontSize = 22.sp,
@@ -1166,6 +1152,30 @@ fun NewsDetailScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // 🔥🔥🔥 KOTHA CODE: DATE & TIME ADD CHESAM 🔥🔥🔥
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 12.dp) // Kinda content ki gap
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DateRange, // Calendar Icon
+                    contentDescription = null,
+                    tint = TextGray,
+                    modifier = Modifier.size(14.dp)
+                )
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Date & Time Text
+                Text(
+                    text = formatDate(article.date), // "12 Mar 2024 • 10:30 AM"
+                    fontSize = 12.sp,
+                    color = TextGray
+                )
+            }
+            // 🔥🔥🔥 END OF NEW CODE 🔥🔥🔥
+
+            // 2. CONTENT (Existing Code)
             Text(
                 text = android.text.Html
                     .fromHtml(article.content, android.text.Html.FROM_HTML_MODE_LEGACY)
@@ -1176,9 +1186,6 @@ fun NewsDetailScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-            // val isLoggedIn = prefs.getBoolean("isLoggedIn", false)
-
             // 🔴 ACTION ROW (Share + Bookmark + Comment)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1187,11 +1194,9 @@ fun NewsDetailScreen(
             ) {
 
                 // SHARE
-                // SHARE
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable {
-                        // 🔥 IKKADA KOTHA LOGIC ADD CHESAM
                         shareNewsDetailWithImage(
                             context = context,
                             imageUrl = article.image,
@@ -1217,24 +1222,19 @@ fun NewsDetailScreen(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable {
-
                         Toast.makeText(
                             context,
                             "Article Bookmarked",
                             Toast.LENGTH_SHORT
                         ).show()
-
                     }
                 ) {
-
                     Icon(
                         Icons.Default.BookmarkBorder,
                         contentDescription = null,
                         tint = BrandRed
                     )
-
                     Spacer(modifier = Modifier.width(6.dp))
-
                     Text(
                         "Bookmark",
                         color = BrandRed,
@@ -1249,27 +1249,22 @@ fun NewsDetailScreen(
                         if (!isLoggedIn) {
                             onOpenLoginDialog()
                         } else {
-                            // 🔥 Ippudu idhi kotha screen ki pampisthundi
                             onCommentClick(article)
                         }
                     }
                 ){
-
                     Icon(
                         Icons.Default.Comment,
                         contentDescription = null,
                         tint = BrandRed
                     )
-
                     Spacer(modifier = Modifier.width(6.dp))
-
                     Text(
                         "Comment",
                         color = BrandRed,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-
             }
 
             if (showCommentBox) {
@@ -1343,7 +1338,6 @@ fun NewsDetailScreen(
                     }
                 }
             }
-
         }
     }
 }
@@ -2337,28 +2331,36 @@ fun FeaturedNewsCard(img: String, tit: String, meta: String, onClick: () -> Unit
 }
 
 @Composable
-fun SmallNewsCard(img: String, tit: String, date: String, auth: String, onClick: () -> Unit = {}) {
+fun SmallNewsCard(
+    img: String,
+    tit: String,
+    date: String,
+    auth: String,
+    onClick: () -> Unit = {}
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(84.dp)
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .height(96.dp) // 🔥 Height konchem pencham (Details clear ga undadaniki)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
             .clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(1.dp),
-        shape = RoundedCornerShape(8.dp)
+        elevation = CardDefaults.cardElevation(2.dp), // Shadow konchem pencham
+        shape = RoundedCornerShape(10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxSize().padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+
+            // 1. IMAGE CARD
             Card(
-                shape = RoundedCornerShape(6.dp),
-                modifier = Modifier.size(90.dp, 60.dp)
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.size(100.dp, 75.dp) // Image size set chesam
             ) {
                 Image(
-                    rememberAsyncImagePainter(img),
-                    null,
+                    painter = rememberAsyncImagePainter(img),
+                    contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -2366,31 +2368,46 @@ fun SmallNewsCard(img: String, tit: String, date: String, auth: String, onClick:
 
             Spacer(modifier = Modifier.width(12.dp))
 
+            // 2. TEXT DETAILS
             Column(modifier = Modifier.weight(1f)) {
 
+                // Title
                 Text(
-                    tit,
+                    text = tit,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     color = TextBlack,
-                    lineHeight = 16.sp
+                    lineHeight = 18.sp
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.weight(1f)) // Kinda ki push chestundi
 
+                // 🔥 DATE & TIME ROW 🔥
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.DateRange, null, tint = TextGray, modifier = Modifier.size(10.dp))
-                    Text(" ${formatDate(date)}", fontSize = 9.sp, color = TextGray)
+                    // Clock Icon
+                    Icon(
+                        imageVector = Icons.Default.AccessTime, // 🕒 Time Icon
+                        contentDescription = null,
+                        tint = TextGray,
+                        modifier = Modifier.size(12.dp)
+                    )
 
-                    Spacer(modifier = Modifier.weight(1f))
+                    Spacer(modifier = Modifier.width(4.dp))
 
-                    Icon(Icons.Default.PersonOutline, null, tint = TextGray, modifier = Modifier.size(11.dp))
-                    Text(" $auth", fontSize = 9.sp, color = TextGray)
+                    // Date & Time Text
+                    // (formatDate function Date inka Time ni kalipi istundi)
+                    Text(
+                        text = formatDate(date),
+                        fontSize = 11.sp, // Chinna font size fit avvadaniki
+                        color = TextGray,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
+                    )
                 }
             }
         }
