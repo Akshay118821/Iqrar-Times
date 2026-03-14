@@ -29,10 +29,12 @@ data class ApiNewsArticle(
     val video: List<String>?,
 
     @SerializedName("youtube_url")
-    val youtube_url: List<String>?
+    val youtube_url: List<String>?,
+
+    @SerializedName("viewcount")
+    val viewcount: Int?
 
 ) {
-
 
     val category_name: String
         get() = categories?.firstOrNull() ?: ""

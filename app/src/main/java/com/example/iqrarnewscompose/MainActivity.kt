@@ -3,12 +3,18 @@ package com.example.iqrarnewscompose
 import VideoArticle
 import VideoItemCard
 import VideosScreen
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.ViewGroup
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -18,19 +24,106 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Comment
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Newspaper
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.PlayCircleFilled
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,35 +139,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import coil.compose.rememberAsyncImagePainter
+import com.example.iqrarnewscompose.api.CommonResponse
 import com.example.iqrarnewscompose.api.RetrofitInstance
 import com.example.iqrarnewscompose.api.SendOtpRequest
 import com.example.iqrarnewscompose.api.VerifyOtpRequest
-import com.example.iqrarnewscompose.api.CommonResponse
+import com.example.iqrarnewscompose.profile.PreferencesScreen
+import com.example.iqrarnewscompose.profile.ProfileGridItem
+import com.example.iqrarnewscompose.profile.ProfileMenuView
 import com.example.iqrarnewscompose.ui.theme.IqrarNewsComposeTheme
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import android.content.Context
-import android.widget.Toast
-import androidx.compose.material.icons.filled.PlayCircleFilled
-import com.example.iqrarnewscompose.profile.ProfileMenuView
-import androidx.compose.runtime.Composable
-import com.google.firebase.messaging.FirebaseMessaging
-import android.util.Log
-import androidx.compose.runtime.saveable.rememberSaveable
-import com.example.iqrarnewscompose.profile.LoggedProfileView
-import com.example.iqrarnewscompose.profile.PreferencesScreen
-import kotlinx.coroutines.Dispatchers
-import androidx.core.content.FileProvider
-import coil.ImageLoader
-import coil.request.ImageRequest
-import coil.request.SuccessResult
-import android.graphics.drawable.BitmapDrawable
-import com.example.iqrarnewscompose.profile.ProfileGridItem
-import java.io.File
-import java.io.FileOutputStream
-import androidx.compose.foundation.shape.CircleShape
 
 // Data Model
 data class NewsArticle(
@@ -83,7 +161,8 @@ data class NewsArticle(
     val image: String,
     val date: String,
     val author: String,
-    val content: String
+    val content: String,
+    val viewCount: String
 )
 
 class MainActivity : ComponentActivity() {
@@ -92,20 +171,37 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
-        //  1. Install Splash Screen
-        val splashScreen = installSplashScreen()
+        // 1) Install Splash Screen
+        installSplashScreen()
 
         super.onCreate(savedInstanceState)
 
-        // Permission Logic
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            requestPermissions(
-                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-                1
-            )
+        // 2) Notification permission - okkasari matrame adige logic
+        val permissionPrefs = getSharedPreferences("permission_prefs", Context.MODE_PRIVATE)
+        val hasRequestedNotification =
+            permissionPrefs.getBoolean("has_requested_notification", false)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+
+            val isAlreadyGranted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!isAlreadyGranted && !hasRequestedNotification) {
+                requestPermissions(
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    1
+                )
+
+                // okkasari adigam ani remember cheskodaniki
+                permissionPrefs.edit()
+                    .putBoolean("has_requested_notification", true)
+                    .apply()
+            }
         }
 
-        // FCM Logic
+        // 3) FCM Logic (same)
         FirebaseMessaging.getInstance().token
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
@@ -113,13 +209,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-        // Data Loading (Background lo jaruguthundi)
+        // 4) Data load (same) - app open avvadaniki wait cheyyadu
         viewModel.loadCategories("HINDI")
-        viewModel.loadNews("", "HINDI") {}
+        viewModel.loadNews("", "HINDI") { }
 
-
-        splashScreen.setKeepOnScreenCondition { false }
-
+        // 5) UI
         setContent {
             IqrarNewsComposeTheme {
                 Surface(
@@ -132,6 +226,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+
 
 // Colors & Fonts
 val BrandRed = Color(0xFFD32F2F)
@@ -158,6 +254,7 @@ fun MainApp(viewModel: NewsViewModel) {
 
     var userEmail by remember { mutableStateOf("") }
     var showLoginDialog by remember { mutableStateOf(false) }
+    var selectedScreen by remember { mutableStateOf("Home") }
 
     BackHandler(enabled = authStep > 0 || drawerState.isOpen) {
         if (drawerState.isOpen) {
@@ -191,7 +288,16 @@ fun MainApp(viewModel: NewsViewModel) {
                     },
                     // 🔥 క్లిక్ చేస్తే ప్రొఫైల్ కి వెళ్ళాలి
                     onViewProfileClick = {
-                        var selectedScreen = "Profile"
+                        selectedScreen = "Profile"
+                        scope.launch { drawerState.close() }
+                    },
+                    onNavigate = { screen ->
+                        selectedScreen = screen
+                        scope.launch { drawerState.close() }
+                    },
+                    onContactClick = {
+                        val intent = Intent(Intent.ACTION_SENDTO).apply { data = Uri.parse("mailto:contact@iqrartimes.com") }
+                        context.startActivity(intent)
                         scope.launch { drawerState.close() }
                     }
                 )
@@ -204,6 +310,8 @@ fun MainApp(viewModel: NewsViewModel) {
             MainContent(
                 viewModel = viewModel,
                 isLoggedIn = isLoggedIn,
+                selectedScreen = selectedScreen,
+                onNavigate = { selectedScreen = it },
                 onOpenDrawer = {
                     scope.launch { drawerState.open() }
                 },
@@ -287,12 +395,13 @@ fun MainApp(viewModel: NewsViewModel) {
 fun MainContent(
     viewModel: NewsViewModel,
     isLoggedIn: Boolean,
+    selectedScreen: String,
+    onNavigate: (String) -> Unit,
     onOpenDrawer: () -> Unit,
     openLogin: () -> Unit,
     openLoginDialog: () -> Unit
 ) {
 
-    var selectedScreen by remember { mutableStateOf("Home") }
     var currentLanguage by remember { mutableStateOf("Hindi") }
     var showLanguageMenu by remember { mutableStateOf(false) }
     var isMainHeaderVisible by remember { mutableStateOf(true) }
@@ -440,7 +549,7 @@ fun MainContent(
                     currentLanguage,
                     onNavigate = { screen ->
                         // 🔥 THE FIX: Navigate away from Flip Screen
-                        selectedScreen = screen
+                        onNavigate(screen)
                         isFlipMode = false
                         currentFlipPage = 0
                         isMainHeaderVisible = true
@@ -484,7 +593,8 @@ fun MainContent(
                             image = apiNews.icon ?: "",
                             date = apiNews.date ?: "",
                             author = apiNews.author ?: "Admin",
-                            content = apiNews.content ?: ""
+                            content = apiNews.content ?: "",
+                            viewCount = apiNews.viewcount?.toString() ?: "0"
                         )
                     },
                     onScreenTap = {
@@ -494,12 +604,35 @@ fun MainContent(
             }
             else {
                 when (selectedScreen) {
-                    "Home" -> HomeScreen(lang = currentLanguage, onNavigate = { selectedScreen = it }, onNewsClick = { selectedArticle = it }, categories = viewModel.categories, viewModel = viewModel)
+                    "Home" -> HomeScreen(lang = currentLanguage, onNavigate = { onNavigate(it) }, onNewsClick = { selectedArticle = it }, categories = viewModel.categories, viewModel = viewModel)
                     "Profile" -> com.example.iqrarnewscompose.profile.ProfileScreen(categories = viewModel.categories, onToggleHeader = { isMainHeaderVisible = it }, openLogin = { openLogin() })
                     "Live TV" -> LiveTVScreen(currentLanguage, viewModel)
                     "E-Paper" -> EPaperNativeScreen(viewModel, currentLanguage)
                     "Videos" -> VideosScreen(currentLanguage, viewModel)
-                    else -> CategoryNewsScreen(catId = selectedScreen, lang = currentLanguage, onNavigate = { selectedScreen = it }, onNewsClick = { selectedArticle = it }, categories = viewModel.categories, viewModel = viewModel)
+                    "Preferences" -> com.example.iqrarnewscompose.profile.PreferencesScreen(
+                        categories = viewModel.categories,
+                        onBack = { 
+                            onNavigate("Home")
+                            isMainHeaderVisible = true 
+                        }
+                    )
+                    "Privacy" -> com.example.iqrarnewscompose.profile.LocalWebViewScreen(
+                        title = "Privacy Policy",
+                        url = "https://www.iqrartimes.com/privacy-policy",
+                        onBack = { 
+                            onNavigate("Home")
+                            isMainHeaderVisible = true 
+                        }
+                    )
+                    "Terms" -> com.example.iqrarnewscompose.profile.LocalWebViewScreen(
+                        title = "Terms & Conditions",
+                        url = "https://www.iqrartimes.com/terms-of-service",
+                        onBack = { 
+                            onNavigate("Home")
+                            isMainHeaderVisible = true 
+                        }
+                    )
+                    else -> CategoryNewsScreen(catId = selectedScreen, lang = currentLanguage, onNavigate = { onNavigate(it) }, onNewsClick = { selectedArticle = it }, categories = viewModel.categories, viewModel = viewModel)
                 }
             }
         }
@@ -515,7 +648,9 @@ fun SideMenuDrawer(
     userName: String, // 🔥 Profile Screen లో ఉన్న పేరు ఇక్కడ పాస్ చేస్తాం
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
-    onViewProfileClick: () -> Unit // 🔥 Navigation callback
+    onViewProfileClick: () -> Unit, // 🔥 Navigation callback
+    onNavigate: (String) -> Unit,
+    onContactClick: () -> Unit
 ){
     Column(
         modifier = Modifier
@@ -602,10 +737,10 @@ fun SideMenuDrawer(
                 }
             }
 
-            DrawerMenuItem(icon = Icons.Outlined.Settings, text = "Settings")
-            DrawerMenuItem(icon = Icons.Outlined.Security, text = "Privacy Policy")
-            DrawerMenuItem(icon = Icons.Outlined.Description, text = "Terms & Conditions")
-            DrawerMenuItem(icon = Icons.Outlined.HelpOutline, text = "Contact Us")
+            DrawerMenuItem(icon = Icons.Outlined.Settings, text = "Preferences", onClick = { onNavigate("Preferences") })
+            DrawerMenuItem(icon = Icons.Outlined.Security, text = "Privacy Policy", onClick = { onNavigate("Privacy") })
+            DrawerMenuItem(icon = Icons.Outlined.Description, text = "Terms & Conditions", onClick = { onNavigate("Terms") })
+            DrawerMenuItem(icon = Icons.Outlined.HelpOutline, text = "Contact Us", onClick = { onContactClick() })
 
             Spacer(modifier = Modifier.height(20.dp))
             Text(text = "Version 1.2.4", color = Color.Gray, fontSize = 13.sp)
@@ -747,12 +882,12 @@ fun LoginDialog(
 }
 
 @Composable
-fun DrawerMenuItem(icon: ImageVector, text: String) {
+fun DrawerMenuItem(icon: ImageVector, text: String, onClick: () -> Unit = {}) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 16.dp)
-            .clickable { /* Handle Click */ },
+            .clickable { onClick() },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(imageVector = icon, contentDescription = text, tint = Color.Black)
@@ -1169,6 +1304,25 @@ fun NewsDetailScreen(
                 // Date & Time Text
                 Text(
                     text = formatDate(article.date), // "12 Mar 2024 • 10:30 AM"
+                    fontSize = 12.sp,
+                    color = TextGray
+                )
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // View Count Icon
+                Icon(
+                    imageVector = Icons.Default.LiveTv, // Generic Eye-like or views
+                    contentDescription = null,
+                    tint = TextGray,
+                    modifier = Modifier.size(14.dp)
+                )
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // View Count Text
+                Text(
+                    text = "${article.viewCount} Views",
                     fontSize = 12.sp,
                     color = TextGray
                 )
@@ -2100,7 +2254,8 @@ fun HomeScreen(
                                         news.icon,
                                         news.date ?: "",
                                         news.author ?: "",
-                                        news.content ?: ""
+                                        news.content ?: "",
+                                        news.viewcount?.toString() ?: "0"
                                     )
                                 )
                             }
@@ -2109,7 +2264,7 @@ fun HomeScreen(
                 }
 
                 item {
-                    SectionHeader(if (lang == "Hindi") "लेटेस्ट न्यूज़" else "Latest News", lang, onViewAllClick = { onNavigate("World") })
+                    SectionHeader(if (lang == "Hindi") "लेटेस्ट न्यूज़" else "Latest News", lang, onViewAllClick = { onNavigate("") })
                 }
 
                 items(viewModel.newsList.take(5)) { news ->
@@ -2126,7 +2281,8 @@ fun HomeScreen(
                                     news.icon,
                                     news.date ?: "",
                                     news.author ?: "",
-                                    news.content ?: ""
+                                    news.content ?: "",
+                                    news.viewcount?.toString() ?: "0"
                                 )
                             )
                         }
@@ -2134,7 +2290,7 @@ fun HomeScreen(
                 }
 
                 item {
-                    SectionHeader(if (lang == "Hindi") "विश्व समाचार" else "World News", lang, onViewAllClick = { onNavigate("World") })
+                    SectionHeader(if (lang == "Hindi") "विश्व समाचार" else "World News", lang, onViewAllClick = { onNavigate("") })
                 }
 
                 items(viewModel.newsList.take(5)) { news ->
@@ -2151,7 +2307,8 @@ fun HomeScreen(
                                     news.icon,
                                     news.date ?: "",
                                     news.author ?: "",
-                                    news.content ?: ""
+                                    news.content ?: "",
+                                    news.viewcount?.toString() ?: "0"
                                 )
                             )
                         }
@@ -2163,14 +2320,14 @@ fun HomeScreen(
                         tit = if (lang == "Hindi") "लाइव टीवी" else "Live TV",
                         des = if (lang == "Hindi") "अपडेट रहें" else "Stay updated",
                         btn = if (lang == "Hindi") "अभी देखें" else "Watch Now",
-                        img = "https://cdn-icons-png.flaticon.com/512/3669/3669968.png"
+                        img = R.drawable.livetv
                     ) { onNavigate("Live TV") }
 
                     SpecialBanner(
                         tit = if (lang == "Hindi") "ई-पेपर" else "E-Paper",
                         des = if (lang == "Hindi") "आज का संस्करण" else "Today's Edition",
                         btn = if (lang == "Hindi") "अभी पढ़ें" else "Read Now",
-                        img = "https://cdn-icons-png.flaticon.com/512/2537/2537926.png"
+                        img = R.drawable.epaper
                     ) { onNavigate("E-Paper") }
                 }
             }
@@ -2238,7 +2395,8 @@ fun CategoryNewsScreen(
                                     item.image?.firstOrNull() ?: "",
                                     item.date ?: "",
                                     item.author ?: "",
-                                    item.content ?: ""
+                                    item.content ?: "",
+                                    item.viewcount?.toString() ?: "0"
                                 )
                             )
                         }
@@ -2406,6 +2564,26 @@ fun SmallNewsCard(
                         fontSize = 11.sp, // Chinna font size fit avvadaniki
                         color = TextGray,
                         fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Icon(
+                        imageVector = Icons.Default.Person, // Author Icon
+                        contentDescription = null,
+                        tint = BrandRed,
+                        modifier = Modifier.size(12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Text(
+                        text = auth,
+                        fontSize = 11.sp,
+                        color = BrandRed,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1
                     )
                 }
@@ -2455,7 +2633,7 @@ fun SectionHeader(tit: String, lang: String, show: Boolean = true, onViewAllClic
 }
 
 @Composable
-fun SpecialBanner(tit: String, des: String, btn: String, img: String, onClick: () -> Unit) {
+fun SpecialBanner(tit: String, des: String, btn: String, img: Any, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(16.dp, 8.dp).clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -2638,10 +2816,10 @@ fun CommentsSectionScreen(
     var isPosting by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
 
-    // 🔥 Refresh trigger - KEY PART
+    //  Refresh trigger - KEY PART
     var refreshKey by remember { mutableIntStateOf(0) }
 
-    // 🔥 Comments load - refreshKey change ayithe reload
+    //  Comments load - refreshKey change ayithe reload
     LaunchedEffect(article.id, refreshKey) {
         isLoading = true
         val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
@@ -2944,3 +3122,4 @@ fun CommentsSectionScreen(
         }
     }
 }
+// 🔥 IDHI CODE END LO ADD CHEYYI

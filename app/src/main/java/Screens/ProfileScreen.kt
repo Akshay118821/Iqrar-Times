@@ -229,7 +229,7 @@ fun ProfileMenuView(onNavigate: (String) -> Unit, onLoginClick: () -> Unit, onCo
 fun LocalWebViewScreen(title: String, url: String, onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
         Row(
-            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
