@@ -498,12 +498,14 @@ fun MainContent(
                                     }
                                 }
                                 Spacer(modifier = Modifier.width(6.dp))
-                                IconButton(onClick = {
-                                    isFlipMode = true
-                                    tempBarsVisible = true
-                                }) {
-                                    Image(painter = painterResource(id = R.drawable.header_badge), contentDescription = "Header Badge", modifier = Modifier.height(28.dp), contentScale = ContentScale.Fit)
-                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                CustomToggleButton(
+                                    checked = isFlipMode,
+                                    onCheckedChange = { 
+                                        isFlipMode = it
+                                        if (it) tempBarsVisible = true
+                                    }
+                                )
                                 Spacer(modifier = Modifier.width(12.dp))
                             }
                         },
@@ -3122,4 +3124,4 @@ fun CommentsSectionScreen(
         }
     }
 }
-// 🔥 IDHI CODE END LO ADD CHEYYI
+//Updates are done in this code .
