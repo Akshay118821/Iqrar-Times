@@ -31,7 +31,7 @@ data class ApiNewsArticle(
     @SerializedName("youtube_url")
     val youtube_url: List<String>?,
 
-    @SerializedName("viewcount")
+    @SerializedName("views_count")
     val viewcount: Int?
 
 ) {
@@ -42,4 +42,11 @@ data class ApiNewsArticle(
     val icon: String
         get() = image?.firstOrNull() ?: ""
 
+    val formattedViewCount: String
+        get() {
+            val count = viewcount ?: 0
+            if (count >= 1000000) return String.format(java.util.Locale.US, "%.1fM", count / 1000000.0).replace(".0M", "M")
+            if (count >= 1000) return String.format(java.util.Locale.US, "%.1fK", count / 1000.0).replace(".0K", "K")
+            return count.toString()
+        }
 }

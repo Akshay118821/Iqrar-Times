@@ -95,7 +95,7 @@ fun VideosScreen(
                             item.video?.firstOrNull() ?: ""
                     },
                     date = formatDisplayDate(item.date ?: ""),
-                    views = "1K"
+                    views = item.formattedViewCount
                 )
 
                 if (videoArticle.videoUrl.isNotEmpty()) {
@@ -236,19 +236,9 @@ fun VideoItemCard(
                 lineHeight = 20.sp
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.DateRange, null, tint = TextGray, modifier = Modifier.size(14.dp))
-                    Text(" ${video.date}", fontSize = 11.sp, color = TextGray)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.RemoveRedEye, null, tint = TextGray, modifier = Modifier.size(14.dp))
-                    Text(" ${video.views} views", fontSize = 11.sp, color = TextGray)
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.RemoveRedEye, null, tint = TextGray, modifier = Modifier.size(14.dp))
+                Text(" ${video.views} views", fontSize = 11.sp, color = TextGray)
             }
         }
     }

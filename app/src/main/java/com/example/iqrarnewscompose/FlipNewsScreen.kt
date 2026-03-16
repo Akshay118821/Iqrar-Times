@@ -8,7 +8,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -68,10 +70,8 @@ fun FlipNewsScreen(
     val savedCategories = prefs.getStringSet("selected_categories", emptySet()) ?: emptySet()
 
     val allNews = viewModel.newsList
-    val filteredNews = remember(allNews, savedCategories) {
-        if (savedCategories.isEmpty()) allNews else allNews.filter { news ->
-            news.categories?.any { it in savedCategories } == true
-        }
+    val filteredNews = if (savedCategories.isEmpty()) allNews else allNews.filter { news ->
+        news.categories?.any { it in savedCategories } == true
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
@@ -108,7 +108,40 @@ fun FlipNewsScreen(
                                 }
                             }) {
                             Column(modifier = Modifier.fillMaxSize()) {
-                                Image(painter = rememberAsyncImagePainter(news.icon), contentDescription = null, modifier = Modifier.fillMaxWidth().weight(0.8f), contentScale = ContentScale.Crop)
+                                Box(modifier = Modifier.fillMaxWidth().weight(0.8f)) {
+                                    Image(
+                                        painter = rememberAsyncImagePainter(news.icon),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+
+                                    // 🔥 View Count Badge (Top Right)
+                                    Surface(
+                                        color = Color.Black.copy(alpha = 0.6f),
+                                        shape = RoundedCornerShape(4.dp),
+                                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = androidx.compose.material.icons.Icons.Default.LiveTv,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = news.formattedViewCount,
+                                                color = Color.White,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
                                 Box(modifier = Modifier.fillMaxWidth().background(BrandRed).padding(horizontal = 16.dp, vertical = 6.dp)) {
                                     Text(text = "IQRAR TIMES", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black, fontStyle = FontStyle.Italic)
                                 }

@@ -8,6 +8,9 @@ import com.example.iqrarnewscompose.api.ApiNewsArticle
 import com.example.iqrarnewscompose.api.Comment
 import com.example.iqrarnewscompose.api.NewsRepository
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 class NewsViewModel : ViewModel() {
 
@@ -20,6 +23,10 @@ class NewsViewModel : ViewModel() {
 
     var isLoading = mutableStateOf(false)
     private val newsCache = mutableMapOf<String, List<ApiNewsArticle>>()
+
+    // 🔥 Track which date's ePaper is actually being shown
+    var epaperActualDate = mutableStateOf("")
+    var epaperIsSearching = mutableStateOf(false)
 
     fun loadCategories(lang: String) {
         viewModelScope.launch {
@@ -106,15 +113,40 @@ class NewsViewModel : ViewModel() {
         }
     }
 
+    // 🔥 UPDATED: If today's ePaper not found, fallback to nearest previous date (up to 7 days back)
     fun loadEPaper(lang: String, date: String) {
         viewModelScope.launch {
             try {
                 epaperList.clear()
-                val data = repo.fetchEPaper(lang, date)
-                val filteredData = data.filter { it.date == date }
-                epaperList.addAll(filteredData)
+                epaperActualDate.value = date
+                epaperIsSearching.value = true
+
+                val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val calendar = Calendar.getInstance()
+                calendar.time = formatter.parse(date) ?: return@launch
+
+                // Try the selected date first, then go back up to 7 days
+                for (i in 0..7) {
+                    val tryDate = formatter.format(calendar.time)
+                    val data = repo.fetchEPaper(lang, tryDate)
+                    val filteredData = data.filter { it.date == tryDate }
+
+                    if (filteredData.isNotEmpty()) {
+                        epaperList.addAll(filteredData)
+                        epaperActualDate.value = tryDate
+                        epaperIsSearching.value = false
+                        return@launch
+                    }
+
+                    // Go back one day
+                    calendar.add(Calendar.DAY_OF_YEAR, -1)
+                }
+
+                // No data found in 7 days — list stays empty
+                epaperIsSearching.value = false
             } catch (e: Exception) {
                 e.printStackTrace()
+                epaperIsSearching.value = false
             }
         }
     }

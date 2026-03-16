@@ -8,10 +8,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,7 +29,13 @@ import com.example.iqrarnewscompose.BrandRed
 import com.example.iqrarnewscompose.CategoryItem
 import com.example.iqrarnewscompose.TextBlack
 import com.example.iqrarnewscompose.TextGray
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.iqrarnewscompose.R
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PreferencesScreen(
     categories: List<CategoryItem>,
@@ -63,182 +73,249 @@ fun PreferencesScreen(
             .fillMaxSize()
             .background(Color.White)
     ) {
-
-        // Header
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
         ) {
-            IconButton(onClick = { onBack() }) {
-                Icon(Icons.Default.ArrowBack, null, tint = TextBlack)
-            }
-
-            Text(
-                text = "Preferences",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = BrandRed
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Title
-        Text(
-            text = "SELECT YOUR INTERESTS",
-            modifier = Modifier.padding(start = 16.dp),
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-            color = TextGray
-        )
-
-        Text(
-            text = "Choose categories for your preferred news feed",
-            modifier = Modifier.padding(start = 16.dp, top = 4.dp),
-            fontSize = 12.sp,
-            color = TextGray
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Categories List
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 16.dp)
-        ) {
-            items(parentCategories) { category ->
-
-                val isSelected = selectedCategories.contains(category.id)
-
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp)
-                        .clickable {
-                            // 🔥 UPDATE: కచ్చితంగా కేటగిరీ ID ని మాత్రమే యాడ్/రిమూవ్ చేయాలి
-                            if (isSelected) {
-                                selectedCategories.remove(category.id ?: "")
-                            } else {
-                                category.id?.let { selectedCategories.add(it) }
-                            }
-                        },
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isSelected)
-                            BrandRed.copy(alpha = 0.1f)
-                        else
-                            Color.White
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(
-                        defaultElevation = if (isSelected) 4.dp else 1.dp
-                    ),
-                    border = if (isSelected) {
-                        BorderStroke(2.dp, BrandRed)
-                    } else {
-                        BorderStroke(1.dp, Color.LightGray)
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = category.name ?: "",
-                            fontSize = 16.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) BrandRed else TextBlack
-                        )
-
-                        if (isSelected) {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = "Selected",
-                                tint = BrandRed,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-        }
-
-        // Notifications Toggle
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
-            shape = RoundedCornerShape(12.dp)
-        ) {
+            // Sub-Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(top = 16.dp, start = 8.dp, end = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Push Notifications",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextBlack
-                    )
-                    Text(
-                        "Get notified about breaking news",
-                        fontSize = 12.sp,
-                        color = TextGray
-                    )
+                IconButton(onClick = { onBack() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = BrandRed)
                 }
 
-                Switch(
-                    checked = notificationsEnabled,
-                    onCheckedChange = { notificationsEnabled = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = BrandRed
-                    )
+                Text(
+                    text = "Preferences",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BrandRed
                 )
+            }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // INTERESTS SECTION
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            Text(
+                text = "SELECT YOUR INTERESTS",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Gray.copy(alpha = 0.8f)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFEEEEEE))
+            ) {
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    parentCategories.forEach { category ->
+                        val isSelected = selectedCategories.contains(category.id)
+                        
+                        CategoryChip(
+                            label = category.name ?: "",
+                            isSelected = isSelected,
+                            onClick = {
+                                if (isSelected) {
+                                    selectedCategories.remove(category.id ?: "")
+                                } else {
+                                    category.id?.let { selectedCategories.add(it) }
+                                }
+                            }
+                        )
+                    }
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // LANGUAGE SECTION
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            Text(
+                text = "LANGUAGE",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Gray.copy(alpha = 0.8f)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { /* Open Language Dialog */ },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFEEEEEE))
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Language,
+                            contentDescription = null,
+                            tint = BrandRed,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            "Language",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextBlack
+                        )
+                    }
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "English", // This can be dynamic
+                            fontSize = 15.sp,
+                            color = Color.Gray
+                        )
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = Color.Gray,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // NOTIFICATIONS SECTION
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            Text(
+                text = "NOTIFICATIONS",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Gray.copy(alpha = 0.8f)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFEEEEEE))
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = BrandRed,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            "Push Notifications",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextBlack
+                        )
+                    }
+                    
+                    Switch(
+                        checked = notificationsEnabled,
+                        onCheckedChange = { notificationsEnabled = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = BrandRed,
+                            uncheckedThumbColor = Color.White,
+                            uncheckedTrackColor = Color.LightGray
+                        )
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "Stay updated with breaking news and personalized alerts based on your interests.",
+                fontSize = 12.sp,
+                color = Color.Gray,
+                lineHeight = 18.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(40.dp))
 
         // Save Button
         Button(
             onClick = {
-                // 🔥 UPDATE: IDs ని సెట్ ఫార్మాట్ లో సేవ్ చేస్తున్నాం
                 prefs.edit()
                     .putStringSet("selected_categories", selectedCategories.toSet())
                     .putBoolean("notifications_enabled", notificationsEnabled)
                     .apply()
 
                 Toast.makeText(context, "Preferences saved!", Toast.LENGTH_SHORT).show()
-                onBack() // మళ్ళీ ప్రొఫైల్ కి వెళ్తుంది
+                onBack()
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(55.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BrandRed)
+                .padding(horizontal = 20.dp)
+                .height(56.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = BrandRed),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
         ) {
             Text(
                 "SAVE PREFERENCES",
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
+                fontSize = 16.sp,
+                letterSpacing = 0.5.sp
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        }
+
+        Spacer(modifier = Modifier.height(30.dp))
+    }
+}
+
+@Composable
+fun CategoryChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.clickable { onClick() },
+        shape = RoundedCornerShape(20.dp),
+        border = if (isSelected) null else BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.6f)),
+        color = if (isSelected) BrandRed else Color.White
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            fontSize = 14.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = if (isSelected) Color.White else Color.Black.copy(alpha = 0.7f)
+        )
     }
 }

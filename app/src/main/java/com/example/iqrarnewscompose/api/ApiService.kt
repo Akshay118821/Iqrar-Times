@@ -111,8 +111,12 @@ data class TokenData(
     val token: String? = null,
     val accessToken: String? = null,
     val auth_token: String? = null,
-    val access: String? = null,        //  ADD THIS LINE
-    val refresh: String? = null        //  ADD THIS LINE
+    val access: String? = null,
+    val refresh: String? = null,
+    val username: String? = null,
+    val id: String? = null,
+    val user_id: String? = null,
+    val name: String? = null
 )
 
 data class CommentResponse(

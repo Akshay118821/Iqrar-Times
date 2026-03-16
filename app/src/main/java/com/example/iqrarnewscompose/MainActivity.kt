@@ -50,11 +50,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.filled.Comment
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Description
@@ -64,6 +65,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Newspaper
@@ -73,11 +75,13 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Security
@@ -153,6 +157,10 @@ import com.example.iqrarnewscompose.ui.theme.IqrarNewsComposeTheme
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material.icons.filled.RemoveRedEye
+import androidx.core.content.edit
+import androidx.core.net.toUri
 
 // Data Model
 data class NewsArticle(
@@ -243,7 +251,7 @@ fun MainApp(viewModel: NewsViewModel) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    var authStep by remember { mutableStateOf(0) }
+    var authStep by remember { mutableIntStateOf(0) }
 
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
@@ -252,9 +260,21 @@ fun MainApp(viewModel: NewsViewModel) {
         mutableStateOf(prefs.getBoolean("isLoggedIn", false))
     }
 
+    DisposableEffect(prefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+            if (key == "isLoggedIn") {
+                isLoggedIn = p.getBoolean("isLoggedIn", false)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
     var userEmail by remember { mutableStateOf("") }
     var showLoginDialog by remember { mutableStateOf(false) }
     var selectedScreen by remember { mutableStateOf("Home") }
+
+    var currentLanguage by remember { mutableStateOf("Hindi") }
 
     BackHandler(enabled = authStep > 0 || drawerState.isOpen) {
         if (drawerState.isOpen) {
@@ -276,13 +296,22 @@ fun MainApp(viewModel: NewsViewModel) {
 
                 SideMenuDrawer(
                     isLoggedIn = isLoggedIn,
-                    userName = "Kalyan Kumar", // 🔥 Profile స్క్రీన్ లో ఉన్న పేరు ఇక్కడ ఇస్తున్నాం
+                    userName = prefs.getString("userEmail", "")?.takeIf { it.isNotEmpty() }?.let { "ID: $it" } ?: "User",
+                    currentLanguage = currentLanguage,
+                    onLanguageChange = { lang ->
+                        currentLanguage = lang
+                        val langParam = if (lang == "Hindi") "HINDI" else "ENGLISH"
+                        viewModel.loadCategories(langParam)
+                        viewModel.loadNews("", langParam) {}
+                        selectedScreen = "Home"
+                        scope.launch { drawerState.close() }
+                    },
                     onLoginClick = {
                         scope.launch { drawerState.close() }
                         authStep = 1
                     },
                     onLogoutClick = {
-                        prefs.edit().putBoolean("isLoggedIn", false).apply()
+                        prefs.edit { putBoolean("isLoggedIn", false) }
                         isLoggedIn = false
                         scope.launch { drawerState.close() }
                     },
@@ -296,7 +325,7 @@ fun MainApp(viewModel: NewsViewModel) {
                         scope.launch { drawerState.close() }
                     },
                     onContactClick = {
-                        val intent = Intent(Intent.ACTION_SENDTO).apply { data = Uri.parse("mailto:contact@iqrartimes.com") }
+                        val intent = Intent(Intent.ACTION_SENDTO).apply { data = "mailto:contact@iqrartimes.com".toUri() }
                         context.startActivity(intent)
                         scope.launch { drawerState.close() }
                     }
@@ -311,6 +340,13 @@ fun MainApp(viewModel: NewsViewModel) {
                 viewModel = viewModel,
                 isLoggedIn = isLoggedIn,
                 selectedScreen = selectedScreen,
+                currentLanguage = currentLanguage,
+                onLanguageChange = { lang ->
+                    currentLanguage = lang
+                    val langParam = if (lang == "Hindi") "HINDI" else "ENGLISH"
+                    viewModel.loadCategories(langParam)
+                    viewModel.loadNews("", langParam) {}
+                },
                 onNavigate = { selectedScreen = it },
                 onOpenDrawer = {
                     scope.launch { drawerState.open() }
@@ -330,19 +366,23 @@ fun MainApp(viewModel: NewsViewModel) {
                         isLoggedIn = true
 
                         // 🔥 UPDATED TOKEN EXTRACTION
-                        val tkn = result.data?.access          // Try 'access' first
+                        val tkn = result.data?.access
                             ?: result.data?.token
                             ?: result.data?.accessToken
                             ?: result.data?.auth_token
                             ?: result.token
                             ?: ""
 
-                        Log.d("TOKEN_SAVE", "Saving Token: ${tkn.take(50)}")
+                        // 🔥 USER ID EXTRACTION - robust capture from backend
+                        val userId = result.data?.username ?: ""
 
-                        prefs.edit()
-                            .putBoolean("isLoggedIn", true)
-                            .putString("token", tkn)
-                            .apply()
+                        Log.d("LOGIN_ID_SAVE", "Saving Token and UserID: $userId")
+
+                        prefs.edit {
+                            putBoolean("isLoggedIn", true)
+                            putString("token", tkn)
+                            putString("userEmail", userId) // Save ID as the display name
+                        }
 
                         showLoginDialog = false
                     }
@@ -379,7 +419,10 @@ fun MainApp(viewModel: NewsViewModel) {
 
                         // login success
                         isLoggedIn = true
-                        authStep = 0
+                        scope.launch {
+                            delay(100)
+                            authStep = 0
+                        }
                     },
 
                     onBackClick = {
@@ -396,13 +439,14 @@ fun MainContent(
     viewModel: NewsViewModel,
     isLoggedIn: Boolean,
     selectedScreen: String,
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit,
     onNavigate: (String) -> Unit,
     onOpenDrawer: () -> Unit,
     openLogin: () -> Unit,
     openLoginDialog: () -> Unit
 ) {
 
-    var currentLanguage by remember { mutableStateOf("Hindi") }
     var showLanguageMenu by remember { mutableStateOf(false) }
     var isMainHeaderVisible by remember { mutableStateOf(true) }
     var selectedArticle by remember { mutableStateOf<NewsArticle?>(null) }
@@ -418,11 +462,6 @@ fun MainContent(
             delay(2000)
             tempBarsVisible = false
         }
-    }
-
-    LaunchedEffect(currentLanguage) {
-        val langParam = if (currentLanguage == "Hindi") "HINDI" else "ENGLISH"
-        viewModel.loadCategories(langParam)
     }
 
     BackHandler(enabled = selectedArticle != null || isFlipMode || showCommentsFor != null) {
@@ -478,21 +517,17 @@ fun MainContent(
                                         DropdownMenuItem(
                                             text = { Text("English", color = TextBlack) },
                                             onClick = {
-                                                currentLanguage = "English"
+                                                onLanguageChange("English")
                                                 showLanguageMenu = false
                                                 isFlipMode = false // 🔥 Close Flip Screen
-                                                viewModel.loadCategories("ENGLISH")
-                                                viewModel.loadNews("", "ENGLISH") {}
                                             }
                                         )
                                         DropdownMenuItem(
                                             text = { Text("हिंदी", color = TextBlack) },
                                             onClick = {
-                                                currentLanguage = "Hindi"
+                                                onLanguageChange("Hindi")
                                                 showLanguageMenu = false
                                                 isFlipMode = false // 🔥 Close Flip Screen
-                                                viewModel.loadCategories("HINDI")
-                                                viewModel.loadNews("", "HINDI") {}
                                             }
                                         )
                                     }
@@ -533,7 +568,7 @@ fun MainContent(
 
                             if (!isFlipMode) isMainHeaderVisible = true
                         }) {
-                            Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandRed)
@@ -596,7 +631,7 @@ fun MainContent(
                             date = apiNews.date ?: "",
                             author = apiNews.author ?: "Admin",
                             content = apiNews.content ?: "",
-                            viewCount = apiNews.viewcount?.toString() ?: "0"
+                            viewCount = apiNews.formattedViewCount
                         )
                     },
                     onScreenTap = {
@@ -607,7 +642,17 @@ fun MainContent(
             else {
                 when (selectedScreen) {
                     "Home" -> HomeScreen(lang = currentLanguage, onNavigate = { onNavigate(it) }, onNewsClick = { selectedArticle = it }, categories = viewModel.categories, viewModel = viewModel)
-                    "Profile" -> com.example.iqrarnewscompose.profile.ProfileScreen(categories = viewModel.categories, onToggleHeader = { isMainHeaderVisible = it }, openLogin = { openLogin() })
+                    "Profile" -> com.example.iqrarnewscompose.profile.ProfileScreen(
+                        categories = viewModel.categories,
+                        onToggleHeader = { isMainHeaderVisible = it },
+                        openLogin = { openLogin() },
+                        currentLanguage = currentLanguage,
+                        onLanguageChange = { lang ->
+                            onLanguageChange(lang)
+                            onNavigate("Home")         // 🔥 Language change taruvatha Home ki navigate avvali
+                            isMainHeaderVisible = true // 🔥 Header restore cheyali
+                        }
+                    )
                     "Live TV" -> LiveTVScreen(currentLanguage, viewModel)
                     "E-Paper" -> EPaperNativeScreen(viewModel, currentLanguage)
                     "Videos" -> VideosScreen(currentLanguage, viewModel)
@@ -648,6 +693,8 @@ fun MainContent(
 fun SideMenuDrawer(
     isLoggedIn: Boolean,
     userName: String, // 🔥 Profile Screen లో ఉన్న పేరు ఇక్కడ పాస్ చేస్తాం
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit,
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onViewProfileClick: () -> Unit, // 🔥 Navigation callback
@@ -673,7 +720,7 @@ fun SideMenuDrawer(
                     // Profile Icon (Same as Profile Screen)
                     Surface(
                         modifier = Modifier.size(65.dp),
-                        shape = androidx.compose.foundation.shape.CircleShape,
+                        shape = CircleShape,
                         color = Color.White.copy(alpha = 0.9f)
                     ) {
                         Icon(
@@ -724,25 +771,55 @@ fun SideMenuDrawer(
         Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp)) {
 
             // Language Item
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Outlined.Language, null, tint = Color.Black)
-                Spacer(modifier = Modifier.width(16.dp))
-                Text("Language", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = TextBlack)
-                Box(modifier = Modifier.border(1.dp, Color.LightGray, RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("English", fontSize = 12.sp, color = TextBlack)
-                        Icon(Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(16.dp))
+            var showLangDropdown by remember { mutableStateOf(false) }
+            Box {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showLangDropdown = true }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Outlined.Language, null, tint = Color.Black)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text("Language", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = TextBlack)
+                    Box(modifier = Modifier.border(1.dp, Color.LightGray, RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (currentLanguage == "Hindi") "हिंदी" else "English", fontSize = 12.sp, color = TextBlack)
+                            Icon(Icons.Default.KeyboardArrowDown, null, modifier = Modifier.size(16.dp))
+                        }
                     }
+                }
+                DropdownMenu(
+                    expanded = showLangDropdown,
+                    onDismissRequest = { showLangDropdown = false },
+                    modifier = Modifier.background(Color.White)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("English", color = TextBlack) },
+                        onClick = {
+                            onLanguageChange("English")
+                            showLangDropdown = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("हिंदी", color = TextBlack) },
+                        onClick = {
+                            onLanguageChange("Hindi")
+                            showLangDropdown = false
+                        }
+                    )
                 }
             }
 
-            DrawerMenuItem(icon = Icons.Outlined.Settings, text = "Preferences", onClick = { onNavigate("Preferences") })
+            DrawerMenuItem(
+                icon = Icons.Outlined.Settings, 
+                text = if (isLoggedIn) "Preferences" else "Login", 
+                onClick = { if (isLoggedIn) onNavigate("Preferences") else onLoginClick() }
+            )
             DrawerMenuItem(icon = Icons.Outlined.Security, text = "Privacy Policy", onClick = { onNavigate("Privacy") })
             DrawerMenuItem(icon = Icons.Outlined.Description, text = "Terms & Conditions", onClick = { onNavigate("Terms") })
-            DrawerMenuItem(icon = Icons.Outlined.HelpOutline, text = "Contact Us", onClick = { onContactClick() })
+            DrawerMenuItem(icon = Icons.AutoMirrored.Outlined.HelpOutline, text = "Contact Us", onClick = { onContactClick() })
 
             Spacer(modifier = Modifier.height(20.dp))
             Text(text = "Version 1.2.4", color = Color.Gray, fontSize = 13.sp)
@@ -910,7 +987,7 @@ fun LoginScreen(
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().clickable(enabled = true, indication = null, interactionSource = remember { MutableInteractionSource() }) { /* consume */ }) {
 
         Column(modifier = Modifier.fillMaxSize()) {
 
@@ -1076,7 +1153,7 @@ fun OtpScreen(
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().clickable(enabled = true, indication = null, interactionSource = remember { MutableInteractionSource() }) { /* consume */ }) {
 
         Column(modifier = Modifier.fillMaxSize()) {
 
@@ -1175,11 +1252,17 @@ fun OtpScreen(
                                             ?: ""
 
                                         Log.d("OTP_TOKEN", "Extracted Token: ${tkn.take(50)}")
-                                        // Save login status and token
-                                        prefs.edit()
-                                            .putBoolean("isLoggedIn", true)
-                                            .putString("token", tkn)
-                                            .apply()
+                                        // 🔥 USER ID EXTRACTION - robust capture from backend
+                                        val userId = body?.data?.username ?: ""
+
+                                        Log.d("OTP_ID_SAVE", "Saving UserID: $userId")
+
+                                        // Save login status, token and backend username (ID)
+                                        prefs.edit {
+                                            putBoolean("isLoggedIn", true)
+                                            putString("token", tkn)
+                                            putString("userEmail", userId)
+                                        }
 
                                         onVerifyClick()
                                     }
@@ -1410,7 +1493,7 @@ fun NewsDetailScreen(
                     }
                 ){
                     Icon(
-                        Icons.Default.Comment,
+                        Icons.AutoMirrored.Filled.Comment,
                         contentDescription = null,
                         tint = BrandRed
                     )
@@ -1453,7 +1536,7 @@ fun NewsDetailScreen(
                         Button(
                             onClick = {
                                 if (commentText.isNotBlank()) {
-                                    val latestToken = context.getSharedPreferences("auth", android.content.Context.MODE_PRIVATE).getString("token", "") ?: ""
+                                    val latestToken = context.getSharedPreferences("auth", Context.MODE_PRIVATE).getString("token", "") ?: ""
                                     viewModel.postComment(latestToken, article.id, commentText) { success ->
                                         if (success) {
                                             commentText = ""
@@ -1500,247 +1583,7 @@ fun NewsDetailScreen(
 
 // ... (Pina unna imports anni same unchu) ...
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun ProfileScreen(
-    categories: List<CategoryItem>,
-    onToggleHeader: (Boolean) -> Unit,
-    openLogin: () -> Unit
-){
-    val context = LocalContext.current
-    val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-
-    var isLoggedIn by remember { mutableStateOf(prefs.getBoolean("isLoggedIn", false)) }
-
-    // Instant Update Listener
-    DisposableEffect(prefs) {
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
-            if (key == "isLoggedIn") { isLoggedIn = p.getBoolean("isLoggedIn", false) }
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
-    }
-
-    var localView by rememberSaveable { mutableStateOf("Main") }
-
-    BackHandler(enabled = localView != "Main") {
-        localView = "Main"
-        onToggleHeader(true)
-    }
-
-    Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        when (localView) {
-            "Main" -> {
-                LaunchedEffect(Unit) { onToggleHeader(true) }
-
-                if (!isLoggedIn) {
-                    // 🔥 ERROR FIXED HERE: Parameters ni correct ga pass chesam
-                    ProfileMenuView(
-                        onNavigate = { viewName -> localView = viewName },
-                        onLoginClick = { openLogin() }, // pass openLogin directly
-                        onContactClick = {
-                            val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                data = Uri.parse("mailto:contact@iqrartimes.com")
-                            }
-                            context.startActivity(intent)
-                        }
-                    )
-                } else {
-                    LoggedInProfileUI(
-                        onNavigate = { viewName -> localView = viewName },
-                        onLogout = {
-                            prefs.edit().putBoolean("isLoggedIn", false).apply()
-                        }
-                    )
-                }
-            }
-
-            "Preferences" -> {
-                PreferencesScreen(
-                    categories = categories,
-                    onBack = { localView = "Main"; onToggleHeader(true) }
-                )
-            }
-
-            "Terms" -> LocalWebViewScreen("Terms & Conditions", "https://www.iqrartimes.com/terms-of-service") { localView = "Main" }
-            "Privacy" -> LocalWebViewScreen("Privacy Policy", "https://www.iqrartimes.com/privacy-policy") { localView = "Main" }
-            "About" -> LocalWebViewScreen("About Us", "https://www.iqrartimes.com/about") { localView = "Main" }
-        }
-    }
-}
-
-
-@Composable
-fun LoggedInProfileUI(onNavigate: (String) -> Unit, onLogout: () -> Unit) {
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-
-        Spacer(modifier = Modifier.height(40.dp))
-
-        Image(
-            painter = painterResource(id = R.drawable.ic_profile),
-            contentDescription = null,
-            modifier = Modifier.size(120.dp)
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = "Kalyan Kumar",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            text = "Edit Profile",
-            color = BrandRed
-        )
-
-        Spacer(modifier = Modifier.height(30.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-
-            ProfileGridItem(Icons.Default.Language,"Language",Modifier.weight(1f))
-
-            ProfileGridItem(Icons.Default.Notifications,"Notifications",Modifier.weight(1f))
-
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-
-            ProfileGridItem(Icons.Default.Settings,"Preferences",Modifier.weight(1f))
-
-            ProfileGridItem(Icons.Default.Info, "About", Modifier.weight(1f)) {
-                onNavigate("About")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        ProfileListTile(Icons.Default.Security,"Privacy Policy"){}
-
-        ProfileListTile(Icons.Default.Description,"Terms & Conditions"){}
-
-        ProfileListTile(Icons.Default.Email,"Contact"){}
-
-        ProfileListTile(Icons.Default.Logout,"Log Out") {
-            onLogout()
-        }
-
-    }
-}
-
-@Composable
-fun ProfileGridItem(
-    icon: ImageVector,
-    text: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit = {} // 🔥 Idhi kothaga add chesam
-) {
-    OutlinedButton(
-        onClick = onClick, // 🔥 Ikkada empty badulu 'onClick' pettu
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
-        modifier = modifier.height(65.dp),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextBlack)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, modifier = Modifier.size(22.dp), tint = TextBlack)
-            Spacer(Modifier.width(10.dp))
-            Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        }
-    }
-}
-
-@Composable
-fun ProfileListTile(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            .height(60.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(1.dp),
-        border = BorderStroke(1.dp, Color(0xFFF0F0F0))
-    ) {
-        Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = TextBlack, modifier = Modifier.size(22.dp))
-            Spacer(modifier = Modifier.width(18.dp))
-            Text(label, color = TextBlack, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.weight(1f))
-            Icon(Icons.Default.ChevronRight, null, tint = Color.Gray)
-        }
-    }
-}
-
-@SuppressLint("SetJavaScriptEnabled")
-@Composable
-fun LocalWebViewScreen(title: String, url: String, onBack: () -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, null, tint = BrandRed)
-            }
-            Text(
-                title,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                modifier = Modifier.padding(start = 8.dp),
-                color = TextBlack
-            )
-        }
-        HorizontalDivider()
-
-        // WebView implementation with all necessary fixes
-        AndroidView(
-            factory = { ctx ->
-                WebView(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-
-                    // 🔥 Ee settings valla blank screen raadu, website mobile screen ki fit avthundi
-                    settings.apply {
-                        javaScriptEnabled = true      // JavaScript run avvadaniki
-                        domStorageEnabled = true       // Modern websites load avvadaniki kachitamga undali
-                        databaseEnabled = true
-                        useWideViewPort = true         // Screen size auto adjust avvadaniki
-                        loadWithOverviewMode = true    // Mobile view correctly raavadaniki
-                        javaScriptCanOpenWindowsAutomatically = true
-                    }
-
-                    // Website handling settings
-                    webViewClient = android.webkit.WebViewClient()   // Links open avvadaniki
-                    webChromeClient = android.webkit.WebChromeClient() // Website scripts fast ga run avvadaniki
-
-                    loadUrl(url)
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-    }
-}
-
-data class LiveItem(
-    val thumbUrl: String,
-    val titleEn: String,
-    val titleHi: String,
-    val metaEn: String,
-    val metaHi: String
-)
+// Redundant Profile Components Removed. Using components from Screens/ProfileScreen.kt instead.
 
 @Composable
 fun LiveTVScreen(
@@ -1955,15 +1798,39 @@ fun LiveTVScreen(
                                         lineHeight = 18.sp
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = formatDate(item.date ?: ""),
-                                        fontSize = 12.sp,
-                                        color = TextGray
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        // Left: Date
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.AccessTime, null, tint = TextGray, modifier = Modifier.size(11.dp))
+                                            Spacer(modifier = Modifier.width(3.dp))
+                                            Text(
+                                                text = formatDate(item.date ?: "").take(11),
+                                                fontSize = 10.sp,
+                                                color = TextGray
+                                            )
+                                        }
+
+                                        // Right: Views + Admin
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.RemoveRedEye, null, tint = TextGray, modifier = Modifier.size(11.dp))
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text(text = item.formattedViewCount, fontSize = 10.sp, color = TextGray)
+
+                                            Spacer(modifier = Modifier.width(8.dp))
+
+                                            Icon(Icons.Default.Person, null, tint = BrandRed, modifier = Modifier.size(11.dp))
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text(text = item.author ?: "Admin", fontSize = 10.sp, color = TextGray)
+                                        }
+                                    }
                                 }
                             }
-                            // Divider
-                            Divider(
+                            // HorizontalDivider
+                            HorizontalDivider(
                                 color = Color.LightGray,
                                 thickness = 0.5.dp,
                                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -1993,7 +1860,7 @@ fun EPaperNativeScreen(viewModel: NewsViewModel, lang: String) {
 
     val S3_BASE_URL = "https://iqrar-times.s3.ap-south-1.amazonaws.com/"
 
-    // 🔥 DATE LOGIC: Date select chesinappudu patha data clear ayyi kothadi load avthundi
+    //  DATE LOGIC: Date select chesinappudu patha data clear ayyi kothadi load avthundi
     LaunchedEffect(selectedDate, lang) {
         viewModel.loadEPaper(lang, selectedDate)
         currentPageIndex = 0 // Reset index to first card
@@ -2054,8 +1921,13 @@ fun EPaperNativeScreen(viewModel: NewsViewModel, lang: String) {
         ) {
             if (epapers.isEmpty()) {
                 Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = BrandRed)
-                    Text("Finding news for $selectedDate", modifier = Modifier.padding(top = 10.dp), fontSize = 14.sp)
+                    if (viewModel.epaperIsSearching.value) {
+                        CircularProgressIndicator(color = BrandRed)
+                        Text("Finding news for $selectedDate...", modifier = Modifier.padding(top = 10.dp), fontSize = 14.sp)
+                    } else {
+                        Text("No E-Paper available", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text("No editions found for the last 7 days", modifier = Modifier.padding(top = 6.dp), fontSize = 13.sp, color = Color.Gray)
+                    }
                 }
             } else {
                 val currentItem = epapers[currentPageIndex]
@@ -2080,28 +1952,32 @@ fun EPaperNativeScreen(viewModel: NewsViewModel, lang: String) {
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedButton(
-                    onClick = { if (currentPageIndex > 0) currentPageIndex-- },
-                    enabled = currentPageIndex > 0,
-                    modifier = Modifier.width(110.dp).height(38.dp),
-                    shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.2.dp, if (currentPageIndex > 0) BrandRed else Color.LightGray)
-                ) {
-                    Text("Previous", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
+                // 🔥 Previous button — only show when NOT on first page
+                if (currentPageIndex > 0) {
+                    OutlinedButton(
+                        onClick = { currentPageIndex-- },
+                        modifier = Modifier.width(110.dp).height(38.dp),
+                        shape = RoundedCornerShape(50),
+                        border = BorderStroke(1.2.dp, BrandRed)
+                    ) {
+                        Text("Previous", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
+                    }
                 }
 
-                // 🔥 DISTANCE: Prev/Next madhya gap ni 100dp ki pencha (Far ga undadaniki)
+                // 🔥 DISTANCE: Prev/Next madhya gap
                 Spacer(modifier = Modifier.width(100.dp))
 
-                Button(
-                    onClick = { if (currentPageIndex < epapers.size - 1) currentPageIndex++ },
-                    enabled = currentPageIndex < epapers.size - 1,
-                    modifier = Modifier.width(110.dp).height(38.dp),
-                    shape = RoundedCornerShape(50),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                    border = BorderStroke(1.2.dp, if (currentPageIndex < epapers.size - 1) BrandRed else Color.LightGray)
-                ) {
-                    Text("Next", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
+                // 🔥 Next button — only show when NOT on last page
+                if (currentPageIndex < epapers.size - 1) {
+                    Button(
+                        onClick = { currentPageIndex++ },
+                        modifier = Modifier.width(110.dp).height(38.dp),
+                        shape = RoundedCornerShape(50),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                        border = BorderStroke(1.2.dp, BrandRed)
+                    ) {
+                        Text("Next", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
@@ -2111,7 +1987,7 @@ fun EPaperNativeScreen(viewModel: NewsViewModel, lang: String) {
 }
 
 // 🔥 HELPER FUNCTION: To handle Download & Share
-fun downloadAndSaveImage(context: android.content.Context, url: String, scope: kotlinx.coroutines.CoroutineScope, isShare: Boolean) {
+fun downloadAndSaveImage(context: Context, url: String, scope: kotlinx.coroutines.CoroutineScope, isShare: Boolean) {
     val loader = coil.ImageLoader(context)
     val request = coil.request.ImageRequest.Builder(context).data(url).allowHardware(false).build()
 
@@ -2130,7 +2006,7 @@ fun downloadAndSaveImage(context: android.content.Context, url: String, scope: k
 }
 
 // 🔥 SAVE TO GALLERY LOGIC
-fun saveImageToGallery(context: android.content.Context, bitmap: android.graphics.Bitmap) {
+fun saveImageToGallery(context: Context, bitmap: android.graphics.Bitmap) {
     val filename = "IqrarEPaper_${System.currentTimeMillis()}.jpg"
     val contentValues = android.content.ContentValues().apply {
         put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, filename)
@@ -2151,7 +2027,7 @@ fun saveImageToGallery(context: android.content.Context, bitmap: android.graphic
 }
 
 // 🔥 SHARE LOGIC
-fun shareImage(context: android.content.Context, bitmap: android.graphics.Bitmap) {
+fun shareImage(context: Context, bitmap: android.graphics.Bitmap) {
     try {
         // 1. Image ni cache lo save chestunnam
         val cachePath = java.io.File(context.cacheDir, "images")
@@ -2195,18 +2071,13 @@ fun HomeScreen(
     viewModel: NewsViewModel
 ) {
     val context = LocalContext.current
-    var showPreferencesScreen by remember { mutableStateOf(false) }
     var isPreferredMode by remember { mutableStateOf(false) }
     val prefs = context.getSharedPreferences("user_preferences", Context.MODE_PRIVATE)
     val savedCategories = prefs.getStringSet("selected_categories", emptySet()) ?: emptySet()
-    // Local loader state
-    var showLoader by remember { mutableStateOf(true) }
 
     LaunchedEffect(lang) {
-        showLoader = true
         val langParam = if (lang == "Hindi") "HINDI" else "ENGLISH"
         viewModel.loadNews("", langParam) {
-            showLoader = false
         }
     }
 
@@ -2248,6 +2119,7 @@ fun HomeScreen(
                             img = news.icon,
                             tit = news.name ?: "",
                             meta = news.date ?: "",
+                            viewCount = news.formattedViewCount,
                             onClick = {
                                 onNewsClick(
                                     NewsArticle(
@@ -2257,7 +2129,7 @@ fun HomeScreen(
                                         news.date ?: "",
                                         news.author ?: "",
                                         news.content ?: "",
-                                        news.viewcount?.toString() ?: "0"
+                                        news.formattedViewCount
                                     )
                                 )
                             }
@@ -2275,6 +2147,7 @@ fun HomeScreen(
                         tit = news.name ?: "",
                         date = news.date ?: "",
                         auth = news.author ?: "Admin",
+                        viewCount = news.formattedViewCount,
                         onClick = {
                             onNewsClick(
                                 NewsArticle(
@@ -2284,7 +2157,7 @@ fun HomeScreen(
                                     news.date ?: "",
                                     news.author ?: "",
                                     news.content ?: "",
-                                    news.viewcount?.toString() ?: "0"
+                                    news.formattedViewCount
                                 )
                             )
                         }
@@ -2301,6 +2174,7 @@ fun HomeScreen(
                         tit = news.name ?: "",
                         date = news.date ?: "",
                         auth = news.author ?: "Admin",
+                        viewCount = news.formattedViewCount,
                         onClick = {
                             onNewsClick(
                                 NewsArticle(
@@ -2310,7 +2184,7 @@ fun HomeScreen(
                                     news.date ?: "",
                                     news.author ?: "",
                                     news.content ?: "",
-                                    news.viewcount?.toString() ?: "0"
+                                    news.formattedViewCount
                                 )
                             )
                         }
@@ -2346,13 +2220,9 @@ fun CategoryNewsScreen(
     categories: List<CategoryItem>,
     viewModel: NewsViewModel
 ) {
-    var showLoader by remember { mutableStateOf(true) }
-
     LaunchedEffect(catId, lang) {
-        showLoader = true
         val langParam = if (lang == "Hindi") "HINDI" else "ENGLISH"
         viewModel.loadNews(catId, langParam) {
-            showLoader = false
         }
     }
 
@@ -2389,6 +2259,7 @@ fun CategoryNewsScreen(
                         tit = item.name ?: "",
                         date = item.date ?: "",
                         auth = item.author ?: "Admin",
+                        viewCount = item.formattedViewCount,
                         onClick = {
                             onNewsClick(
                                 NewsArticle(
@@ -2398,7 +2269,7 @@ fun CategoryNewsScreen(
                                     item.date ?: "",
                                     item.author ?: "",
                                     item.content ?: "",
-                                    item.viewcount?.toString() ?: "0"
+                                    item.formattedViewCount
                                 )
                             )
                         }
@@ -2479,10 +2350,38 @@ fun DynamicCategorySection(
 }
 
 @Composable
-fun FeaturedNewsCard(img: String, tit: String, meta: String, onClick: () -> Unit = {}) {
+fun FeaturedNewsCard(img: String, tit: String, meta: String, viewCount: String, onClick: () -> Unit = {}) {
     Column(modifier = Modifier.padding(16.dp).clickable { onClick() }) {
-        Card(shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().height(200.dp)) {
-            Image(rememberAsyncImagePainter(img), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        Box(modifier = Modifier.fillMaxWidth().height(200.dp)) {
+            Card(shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxSize()) {
+                Image(rememberAsyncImagePainter(img), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
+
+            // 🔥 View Count Badge (Top Right)
+            Surface(
+                color = Color.Black.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LiveTv,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = viewCount,
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(tit, color = TextBlack, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -2496,6 +2395,7 @@ fun SmallNewsCard(
     tit: String,
     date: String,
     auth: String,
+    viewCount: String = "0",
     onClick: () -> Unit = {}
 ) {
     Card(
@@ -2554,36 +2454,45 @@ fun SmallNewsCard(
                         imageVector = Icons.Default.AccessTime, // 🕒 Time Icon
                         contentDescription = null,
                         tint = TextGray,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(10.dp)
                     )
 
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
 
-                    // Date & Time Text
-                    // (formatDate function Date inka Time ni kalipi istundi)
                     Text(
-                        text = formatDate(date),
-                        fontSize = 11.sp, // Chinna font size fit avvadaniki
+                        text = formatDate(date).take(11), // Just date
+                        fontSize = 10.sp,
                         color = TextGray,
-                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         modifier = Modifier.weight(1f)
                     )
 
                     Spacer(modifier = Modifier.width(4.dp))
 
+                    // Views Icon
+                    Icon(
+                        imageVector = Icons.Default.LiveTv,
+                        contentDescription = null,
+                        tint = TextGray,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(text = viewCount, fontSize = 10.sp, color = TextGray)
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
                     Icon(
                         imageVector = Icons.Default.Person, // Author Icon
                         contentDescription = null,
                         tint = BrandRed,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(10.dp)
                     )
 
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
 
                     Text(
                         text = auth,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         color = BrandRed,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1
@@ -2697,63 +2606,7 @@ fun IqrarBottomBar(sel: String, lang: String, onNavigate: (String) -> Unit) {
     }
 }
 
-@Composable
-fun ToggleNewsScreen(
-    viewModel: NewsViewModel,
-    onBack: () -> Unit
-) {
 
-    val context = LocalContext.current
-
-    val prefs = context.getSharedPreferences("user_preferences", Context.MODE_PRIVATE)
-
-    val selectedCategories =
-        prefs.getStringSet("selected_categories", emptySet()) ?: emptySet()
-
-    val newsList = viewModel.newsList
-
-    val filteredNews = newsList.filter { news ->
-        selectedCategories.contains(news.category_name)
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-    ) {
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-
-            IconButton(onClick = { onBack() }) {
-                Icon(Icons.Default.ArrowBack, null)
-            }
-
-            Text(
-                text = "Your News",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        LazyColumn {
-
-            items(filteredNews) { news ->
-
-                SmallNewsCard(
-                    img = news.icon,
-                    tit = news.name ?: "",
-                    date = news.date ?: "",
-                    auth = news.author ?: "Admin"
-                )
-
-            }
-
-        }
-
-    }
-}
 
 // 🔥 Idhi file chivarlo (bayata) add chey mama
 fun shareNewsDetailWithImage(
@@ -2846,7 +2699,7 @@ fun CommentsSectionScreen(
         ) {
             IconButton(onClick = onBack) {
                 Icon(
-                    Icons.Default.ArrowBack,
+                    Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
                     tint = Color.Black
                 )
@@ -3113,7 +2966,7 @@ fun CommentsSectionScreen(
                         )
                     } else {
                         Icon(
-                            Icons.Default.Send,
+                            Icons.AutoMirrored.Filled.Send,
                             contentDescription = "Send",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
@@ -3124,4 +2977,4 @@ fun CommentsSectionScreen(
         }
     }
 }
-//Updates are done in this code .
+//Updates are done in this code
