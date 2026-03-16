@@ -108,6 +108,8 @@ fun ProfileScreen(
             "Preferences" -> {
                 PreferencesScreen(
                     categories = categories,
+                    currentLanguage = currentLanguage,
+                    onLanguageChange = onLanguageChange,
                     onBack = { localView = "Main"; onToggleHeader(true) }
                 )
             }

@@ -621,6 +621,7 @@ fun MainContent(
                 FlipNewsScreen(
                     viewModel = viewModel,
                     initialPage = currentFlipPage,
+                    currentLanguage = currentLanguage, // 🔥 Pass current language here
                     onBack = { isFlipMode = false; currentFlipPage = 0 },
                     onPageChange = { page -> currentFlipPage = page },
                     onNewsClick = { apiNews ->
@@ -658,6 +659,10 @@ fun MainContent(
                     "Videos" -> VideosScreen(currentLanguage, viewModel)
                     "Preferences" -> com.example.iqrarnewscompose.profile.PreferencesScreen(
                         categories = viewModel.categories,
+                        currentLanguage = currentLanguage,
+                        onLanguageChange = { lang ->
+                            onLanguageChange(lang)
+                        },
                         onBack = { 
                             onNavigate("Home")
                             isMainHeaderVisible = true 
@@ -1352,7 +1357,12 @@ fun NewsDetailScreen(
     ) {
 
         Image(
-            painter = rememberAsyncImagePainter(article.image),
+            painter = rememberAsyncImagePainter(
+                coil.request.ImageRequest.Builder(LocalContext.current)
+                    .data(article.image)
+                    .crossfade(true)
+                    .build()
+            ),
             contentDescription = null,
             modifier = Modifier
                 .fillMaxWidth()
@@ -1702,8 +1712,14 @@ fun LiveTVScreen(
                             } else {
                                 // 🖼️ SHOW IMAGE FALLBACK (No Text)
                                 Box(contentAlignment = Alignment.Center) {
+                                    val context = LocalContext.current
                                     Image(
-                                        painter = rememberAsyncImagePainter(item.icon),
+                                        painter = rememberAsyncImagePainter(
+                                            coil.request.ImageRequest.Builder(context)
+                                                .data(item.icon)
+                                                .crossfade(true)
+                                                .build()
+                                        ),
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.fillMaxSize()
@@ -1771,8 +1787,14 @@ fun LiveTVScreen(
                                     colors = CardDefaults.cardColors(containerColor = Color.LightGray)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
+                                        val context = LocalContext.current
                                         Image(
-                                            painter = rememberAsyncImagePainter(item.icon),
+                                            painter = rememberAsyncImagePainter(
+                                                coil.request.ImageRequest.Builder(context)
+                                                    .data(item.icon)
+                                                    .crossfade(true)
+                                                    .build()
+                                            ),
                                             contentDescription = null,
                                             contentScale = ContentScale.Crop,
                                             modifier = Modifier.fillMaxSize()
@@ -1935,7 +1957,12 @@ fun EPaperNativeScreen(viewModel: NewsViewModel, lang: String) {
                 val finalImageUrl = if (imgPath.startsWith("http")) imgPath else S3_BASE_URL + imgPath
 
                 Image(
-                    painter = rememberAsyncImagePainter(model = finalImageUrl),
+                    painter = rememberAsyncImagePainter(
+                        coil.request.ImageRequest.Builder(context)
+                            .data(finalImageUrl)
+                            .crossfade(true)
+                            .build()
+                    ),
                     contentDescription = "News Card",
                     modifier = Modifier
                         .fillMaxSize()
@@ -1952,31 +1979,35 @@ fun EPaperNativeScreen(viewModel: NewsViewModel, lang: String) {
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 🔥 Previous button — only show when NOT on first page
-                if (currentPageIndex > 0) {
-                    OutlinedButton(
-                        onClick = { currentPageIndex-- },
-                        modifier = Modifier.width(110.dp).height(38.dp),
-                        shape = RoundedCornerShape(50),
-                        border = BorderStroke(1.2.dp, BrandRed)
-                    ) {
-                        Text("Previous", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
+                // 🔥 Previous button container — fixed width to prevent shifting
+                Box(modifier = Modifier.width(110.dp), contentAlignment = Alignment.Center) {
+                    if (currentPageIndex > 0) {
+                        OutlinedButton(
+                            onClick = { currentPageIndex-- },
+                            modifier = Modifier.fillMaxWidth().height(38.dp),
+                            shape = RoundedCornerShape(50),
+                            border = BorderStroke(1.2.dp, BrandRed)
+                        ) {
+                            Text("Previous", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
 
                 // 🔥 DISTANCE: Prev/Next madhya gap
                 Spacer(modifier = Modifier.width(100.dp))
 
-                // 🔥 Next button — only show when NOT on last page
-                if (currentPageIndex < epapers.size - 1) {
-                    Button(
-                        onClick = { currentPageIndex++ },
-                        modifier = Modifier.width(110.dp).height(38.dp),
-                        shape = RoundedCornerShape(50),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                        border = BorderStroke(1.2.dp, BrandRed)
-                    ) {
-                        Text("Next", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
+                // 🔥 Next button container — fixed width to prevent shifting
+                Box(modifier = Modifier.width(110.dp), contentAlignment = Alignment.Center) {
+                    if (currentPageIndex < epapers.size - 1) {
+                        Button(
+                            onClick = { currentPageIndex++ },
+                            modifier = Modifier.fillMaxWidth().height(38.dp),
+                            shape = RoundedCornerShape(50),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                            border = BorderStroke(1.2.dp, BrandRed)
+                        ) {
+                            Text("Next", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }
@@ -2351,10 +2382,21 @@ fun DynamicCategorySection(
 
 @Composable
 fun FeaturedNewsCard(img: String, tit: String, meta: String, viewCount: String, onClick: () -> Unit = {}) {
+    val context = LocalContext.current
     Column(modifier = Modifier.padding(16.dp).clickable { onClick() }) {
         Box(modifier = Modifier.fillMaxWidth().height(200.dp)) {
             Card(shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxSize()) {
-                Image(rememberAsyncImagePainter(img), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                Image(
+                    painter = rememberAsyncImagePainter(
+                        coil.request.ImageRequest.Builder(context)
+                            .data(img)
+                            .crossfade(true)
+                            .build()
+                    ),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
             // 🔥 View Count Badge (Top Right)
@@ -2418,8 +2460,14 @@ fun SmallNewsCard(
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.size(100.dp, 75.dp) // Image size set chesam
             ) {
+                val context = LocalContext.current
                 Image(
-                    painter = rememberAsyncImagePainter(img),
+                    painter = rememberAsyncImagePainter(
+                        coil.request.ImageRequest.Builder(context)
+                            .data(img)
+                            .crossfade(true)
+                            .build()
+                    ),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -2977,4 +3025,4 @@ fun CommentsSectionScreen(
         }
     }
 }
-//Updates are done in this code
+//Updates in the App modifications in this Code.

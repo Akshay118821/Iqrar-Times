@@ -63,19 +63,27 @@ fun FlipNewsScreen(
     onPageChange: (Int) -> Unit,
     onNewsClick: (com.example.iqrarnewscompose.api.ApiNewsArticle) -> Unit,
     onScreenTap: () -> Unit,
-    initialPage: Int
+    initialPage: Int,
+    currentLanguage: String = "Hindi" // Default, pass from main if possible
 ) {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("user_preferences", Context.MODE_PRIVATE)
     val savedCategories = prefs.getStringSet("selected_categories", emptySet()) ?: emptySet()
 
-    val allNews = viewModel.newsList
-    val filteredNews = if (savedCategories.isEmpty()) allNews else allNews.filter { news ->
-        news.categories?.any { it in savedCategories } == true
+    // Create stable langParam
+    val langParam = if (currentLanguage == "Hindi") "HINDI" else "ENGLISH"
+
+    // Load news for selected categories once on composition
+    LaunchedEffect(savedCategories, langParam) {
+        viewModel.loadFlipNewsForSelectedCategories(savedCategories, langParam)
     }
 
+    val filteredNews = viewModel.flipNewsList
+    val isLoading = viewModel.isLoadingFlipNews.value
+
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        if (filteredNews.isEmpty()) {
+        if (isLoading || filteredNews.isEmpty()) {
+            // Show loading if fetching data or if no news found yet just show progress
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = BrandRed)
         } else {
             val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { filteredNews.size })
@@ -110,7 +118,12 @@ fun FlipNewsScreen(
                             Column(modifier = Modifier.fillMaxSize()) {
                                 Box(modifier = Modifier.fillMaxWidth().weight(0.8f)) {
                                     Image(
-                                        painter = rememberAsyncImagePainter(news.icon),
+                                        painter = rememberAsyncImagePainter(
+                                            coil.request.ImageRequest.Builder(LocalContext.current)
+                                                .data(news.icon)
+                                                .crossfade(true)
+                                                .build()
+                                        ),
                                         contentDescription = null,
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop

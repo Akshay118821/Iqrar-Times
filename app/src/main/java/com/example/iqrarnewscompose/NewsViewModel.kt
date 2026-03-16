@@ -8,6 +8,8 @@ import com.example.iqrarnewscompose.api.ApiNewsArticle
 import com.example.iqrarnewscompose.api.Comment
 import com.example.iqrarnewscompose.api.NewsRepository
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -23,6 +25,10 @@ class NewsViewModel : ViewModel() {
 
     var isLoading = mutableStateOf(false)
     private val newsCache = mutableMapOf<String, List<ApiNewsArticle>>()
+
+    // 🔥 FLIP NEWS STATE
+    val flipNewsList = mutableStateListOf<ApiNewsArticle>()
+    var isLoadingFlipNews = mutableStateOf(false)
 
     // 🔥 Track which date's ePaper is actually being shown
     var epaperActualDate = mutableStateOf("")
@@ -42,6 +48,41 @@ class NewsViewModel : ViewModel() {
                 categories.addAll(finalSortedCategories)
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+        }
+    }
+
+    // 🔥 PULL ALL SELECTED CATEGORIES FOR FLIP NEWS
+    fun loadFlipNewsForSelectedCategories(selectedCategories: Set<String>, langParam: String) {
+        viewModelScope.launch {
+            try {
+                isLoadingFlipNews.value = true
+                flipNewsList.clear()
+                
+                if (selectedCategories.isEmpty()) {
+                    // No categories selected, fallback to all news
+                    val allNews = repo.getAllNews(langParam)
+                    flipNewsList.addAll(allNews)
+                } else {
+                    // Fetch all selected categories concurrently
+                    val fetchJobs = selectedCategories.map { categoryId ->
+                        async {
+                            repo.getNewsByCategory(categoryId, langParam)
+                        }
+                    }
+                    val results: List<List<ApiNewsArticle>> = fetchJobs.awaitAll()
+                    
+                    // Flatten list and remove duplicates by ID
+                    val combinedNews: List<ApiNewsArticle> = results.flatten().distinctBy { it.id }
+                    
+                    // Sort descending by date (assume string ISO dates sort alphabetically)
+                    val sortedNews = combinedNews.sortedByDescending { it.date }
+                    flipNewsList.addAll(sortedNews)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                isLoadingFlipNews.value = false
             }
         }
     }

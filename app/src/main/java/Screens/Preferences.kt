@@ -39,6 +39,8 @@ import com.example.iqrarnewscompose.R
 @Composable
 fun PreferencesScreen(
     categories: List<CategoryItem>,
+    currentLanguage: String,
+    onLanguageChange: (String) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -56,6 +58,8 @@ fun PreferencesScreen(
     var notificationsEnabled by remember {
         mutableStateOf(prefs.getBoolean("notifications_enabled", true))
     }
+
+    var showLanguageDialog by remember { mutableStateOf(false) }
 
     // Load on start
     LaunchedEffect(Unit) {
@@ -90,7 +94,7 @@ fun PreferencesScreen(
                 }
 
                 Text(
-                    text = "Preferences",
+                    text = if (currentLanguage == "Hindi") "प्राथमिकताएं" else "Preferences",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = BrandRed
@@ -102,7 +106,7 @@ fun PreferencesScreen(
         // INTERESTS SECTION
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             Text(
-                text = "SELECT YOUR INTERESTS",
+                text = if (currentLanguage == "Hindi") "अपनी रुचियां चुनें" else "SELECT YOUR INTERESTS",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.Gray.copy(alpha = 0.8f)
@@ -147,7 +151,7 @@ fun PreferencesScreen(
         // LANGUAGE SECTION
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             Text(
-                text = "LANGUAGE",
+                text = if (currentLanguage == "Hindi") "भाषा" else "LANGUAGE",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.Gray.copy(alpha = 0.8f)
@@ -156,7 +160,7 @@ fun PreferencesScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             Card(
-                modifier = Modifier.fillMaxWidth().clickable { /* Open Language Dialog */ },
+                modifier = Modifier.fillMaxWidth().clickable { showLanguageDialog = true },
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 border = BorderStroke(1.dp, Color(0xFFEEEEEE))
@@ -175,7 +179,7 @@ fun PreferencesScreen(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            "Language",
+                            if (currentLanguage == "Hindi") "भाषा" else "Language",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TextBlack
@@ -184,7 +188,7 @@ fun PreferencesScreen(
                     
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "English", // This can be dynamic
+                            if (currentLanguage == "Hindi") "हिंदी" else "English",
                             fontSize = 15.sp,
                             color = Color.Gray
                         )
@@ -204,7 +208,7 @@ fun PreferencesScreen(
         // NOTIFICATIONS SECTION
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             Text(
-                text = "NOTIFICATIONS",
+                text = if (currentLanguage == "Hindi") "सूचनाएं" else "NOTIFICATIONS",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.Gray.copy(alpha = 0.8f)
@@ -232,7 +236,7 @@ fun PreferencesScreen(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            "Push Notifications",
+                            if (currentLanguage == "Hindi") "पुश सूचनाएं" else "Push Notifications",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TextBlack
@@ -255,7 +259,7 @@ fun PreferencesScreen(
             Spacer(modifier = Modifier.height(8.dp))
             
             Text(
-                text = "Stay updated with breaking news and personalized alerts based on your interests.",
+                text = if (currentLanguage == "Hindi") "ब्रेकिंग न्यूज और अपनी रुचियों के आधार पर व्यक्तिगत अलर्ट के साथ अपडेट रहें।" else "Stay updated with breaking news and personalized alerts based on your interests.",
                 fontSize = 12.sp,
                 color = Color.Gray,
                 lineHeight = 18.sp
@@ -284,14 +288,55 @@ fun PreferencesScreen(
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
         ) {
             Text(
-                "SAVE PREFERENCES",
+                if (currentLanguage == "Hindi") "प्राथमिकताएं सहेजें" else "SAVE PREFERENCES",
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
                 letterSpacing = 0.5.sp
             )
         }
+        }
 
+        if (showLanguageDialog) {
+            AlertDialog(
+                onDismissRequest = { showLanguageDialog = false },
+                title = { Text(if (currentLanguage == "Hindi") "भाषा चुनें" else "Select Language") },
+                text = {
+                    Column {
+                        val languages = listOf("English", "Hindi")
+                        languages.forEach { lang ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onLanguageChange(lang)
+                                        showLanguageDialog = false
+                                    }
+                                    .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = currentLanguage == lang,
+                                    onClick = {
+                                        onLanguageChange(lang)
+                                        showLanguageDialog = false
+                                    },
+                                    colors = RadioButtonDefaults.colors(selectedColor = BrandRed)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(if (lang == "Hindi") "हिंदी" else "English")
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showLanguageDialog = false }) {
+                        Text(if (currentLanguage == "Hindi") "बंद करें" else "Close", color = BrandRed)
+                    }
+                },
+                containerColor = Color.White,
+                shape = RoundedCornerShape(16.dp)
+            )
         }
 
         Spacer(modifier = Modifier.height(30.dp))
