@@ -140,6 +140,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -650,8 +651,8 @@ fun MainContent(
                         currentLanguage = currentLanguage,
                         onLanguageChange = { lang ->
                             onLanguageChange(lang)
-                            onNavigate("Home")         // 🔥 Language change taruvatha Home ki navigate avvali
-                            isMainHeaderVisible = true // 🔥 Header restore cheyali
+                            onNavigate("Home")         //  Language change taruvatha Home ki navigate avvali
+                            isMainHeaderVisible = true //  Header restore cheyali
                         }
                     )
                     "Live TV" -> LiveTVScreen(currentLanguage, viewModel)
@@ -728,11 +729,11 @@ fun SideMenuDrawer(
                         shape = CircleShape,
                         color = Color.White.copy(alpha = 0.9f)
                     ) {
-                        Icon(
-                            Icons.Default.AccountCircle,
-                            contentDescription = null,
-                            modifier = Modifier.padding(2.dp),
-                            tint = Color.Gray
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_user_profile),
+                            contentDescription = "User Profile",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
                         )
                     }
 
@@ -757,14 +758,14 @@ fun SideMenuDrawer(
                         modifier = Modifier.height(36.dp),
                         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
                     ) {
-                        Text("View Profile", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(if (currentLanguage == "Hindi") "प्रोफ़ाइल देखें" else "View Profile", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         } else {
             // BEFORE LOGIN HEADER
             Text(
-                text = "Sign in to your account",
+                text = if (currentLanguage == "Hindi") "अपने खाते में साइन इन करें" else "Sign in to your account",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.Black,
@@ -787,7 +788,7 @@ fun SideMenuDrawer(
                 ) {
                     Icon(Icons.Outlined.Language, null, tint = Color.Black)
                     Spacer(modifier = Modifier.width(16.dp))
-                    Text("Language", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = TextBlack)
+                    Text(if (currentLanguage == "Hindi") "भाषा" else "Language", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold, color = TextBlack)
                     Box(modifier = Modifier.border(1.dp, Color.LightGray, RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(if (currentLanguage == "Hindi") "हिंदी" else "English", fontSize = 12.sp, color = TextBlack)
@@ -819,15 +820,19 @@ fun SideMenuDrawer(
 
             DrawerMenuItem(
                 icon = Icons.Outlined.Settings, 
-                text = if (isLoggedIn) "Preferences" else "Login", 
+                text = if (isLoggedIn) {
+                    if (currentLanguage == "Hindi") "प्राथमिकताएं" else "Preferences"
+                } else {
+                    if (currentLanguage == "Hindi") "लॉगिन करें" else "Login"
+                }, 
                 onClick = { if (isLoggedIn) onNavigate("Preferences") else onLoginClick() }
             )
-            DrawerMenuItem(icon = Icons.Outlined.Security, text = "Privacy Policy", onClick = { onNavigate("Privacy") })
-            DrawerMenuItem(icon = Icons.Outlined.Description, text = "Terms & Conditions", onClick = { onNavigate("Terms") })
-            DrawerMenuItem(icon = Icons.AutoMirrored.Outlined.HelpOutline, text = "Contact Us", onClick = { onContactClick() })
+            DrawerMenuItem(icon = Icons.Outlined.Security, text = if (currentLanguage == "Hindi") "गोपनीयता नीति" else "Privacy Policy", onClick = { onNavigate("Privacy") })
+            DrawerMenuItem(icon = Icons.Outlined.Description, text = if (currentLanguage == "Hindi") "नियम व शर्तें" else "Terms & Conditions", onClick = { onNavigate("Terms") })
+            DrawerMenuItem(icon = Icons.AutoMirrored.Outlined.HelpOutline, text = if (currentLanguage == "Hindi") "हमसे संपर्क करें" else "Contact Us", onClick = { onContactClick() })
 
             Spacer(modifier = Modifier.height(20.dp))
-            Text(text = "Version 1.2.4", color = Color.Gray, fontSize = 13.sp)
+            Text(text = if (currentLanguage == "Hindi") "संस्करण 1.2.4" else "Version 1.2.4", color = Color.Gray, fontSize = 13.sp)
             Spacer(modifier = Modifier.height(30.dp))
 
             // Login / Logout Button
@@ -1842,11 +1847,6 @@ fun LiveTVScreen(
                                             Spacer(modifier = Modifier.width(2.dp))
                                             Text(text = item.formattedViewCount, fontSize = 10.sp, color = TextGray)
 
-                                            Spacer(modifier = Modifier.width(8.dp))
-
-                                            Icon(Icons.Default.Person, null, tint = BrandRed, modifier = Modifier.size(11.dp))
-                                            Spacer(modifier = Modifier.width(2.dp))
-                                            Text(text = item.author ?: "Admin", fontSize = 10.sp, color = TextGray)
                                         }
                                     }
                                 }
@@ -2526,25 +2526,6 @@ fun SmallNewsCard(
                     )
                     Spacer(modifier = Modifier.width(2.dp))
                     Text(text = viewCount, fontSize = 10.sp, color = TextGray)
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    Icon(
-                        imageVector = Icons.Default.Person, // Author Icon
-                        contentDescription = null,
-                        tint = BrandRed,
-                        modifier = Modifier.size(10.dp)
-                    )
-
-                    Spacer(modifier = Modifier.width(2.dp))
-
-                    Text(
-                        text = auth,
-                        fontSize = 10.sp,
-                        color = BrandRed,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
-                    )
                 }
             }
         }
@@ -2715,6 +2696,7 @@ fun CommentsSectionScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     var commentText by remember { mutableStateOf("") }
     var isPosting by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
@@ -2970,6 +2952,7 @@ fun CommentsSectionScreen(
                             Log.d("COMMENT_DEBUG", "Comment Text: $commentText")
                             Log.d("COMMENT_DEBUG", "============================================")
 
+                            keyboardController?.hide()
                             viewModel.postComment(token, article.id, commentText) { success ->
                                 isPosting = false
 
@@ -2978,7 +2961,7 @@ fun CommentsSectionScreen(
 
                                 if (success) {
                                     commentText = ""
-                                    refreshKey++ // 🔥 Idhi GET API call trigger chesthundi
+                                    refreshKey++ //  Idhi GET API call trigger chesthundi
                                     Toast.makeText(
                                         context,
                                         "Comment posted!",

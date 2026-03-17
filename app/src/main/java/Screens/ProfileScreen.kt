@@ -173,7 +173,18 @@ fun LoggedProfileView(
         Spacer(modifier = Modifier.height(30.dp))
 
         Box(contentAlignment = Alignment.BottomEnd) {
-            Icon(Icons.Default.AccountCircle, null, modifier = Modifier.size(110.dp), tint = Color.LightGray)
+            Surface(
+                modifier = Modifier.size(110.dp),
+                shape = CircleShape,
+                color = Color.LightGray
+            ) {
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(id = com.example.iqrarnewscompose.R.drawable.ic_user_profile),
+                    contentDescription = "User Profile",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            }
             Surface(modifier = Modifier.size(30.dp), shape = CircleShape, color = BrandRed, border = BorderStroke(2.dp, Color.White)) {
                 Icon(Icons.Default.Edit, null, tint = Color.White, modifier = Modifier.padding(6.dp))
             }
@@ -181,33 +192,33 @@ fun LoggedProfileView(
 
         Spacer(modifier = Modifier.height(12.dp))
         Text(displayName, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextBlack, textAlign = TextAlign.Center)
-        Text("Edit Profile", color = BrandRed, fontSize = 14.sp)
+        Text(if (currentLanguage == "Hindi") "प्रोफ़ाइल संपादित करें" else "Edit Profile", color = BrandRed, fontSize = 14.sp)
 
         Spacer(modifier = Modifier.height(30.dp))
 
         Row(modifier = Modifier.fillMaxWidth()) {
-            ProfileGridItem(Icons.Default.Language, "Language", Modifier.weight(1f)) { showLanguageDialog = true }
+            ProfileGridItem(Icons.Default.Language, if (currentLanguage == "Hindi") "भाषा" else "Language", Modifier.weight(1f)) { showLanguageDialog = true }
             Spacer(modifier = Modifier.width(12.dp))
-            ProfileGridItem(Icons.Default.Notifications, "Notifications", Modifier.weight(1f)) { onNavigate("Notifications") }
+            ProfileGridItem(Icons.Default.Notifications, if (currentLanguage == "Hindi") "सूचनाएं" else "Notifications", Modifier.weight(1f)) { onNavigate("Notifications") }
         }
         Spacer(modifier = Modifier.height(12.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
-            ProfileGridItem(Icons.Default.Settings, "Preferences", Modifier.weight(1f)) { onNavigate("Preferences") }
+            ProfileGridItem(Icons.Default.Settings, if (currentLanguage == "Hindi") "प्राथमिकताएं" else "Preferences", Modifier.weight(1f)) { onNavigate("Preferences") }
             Spacer(modifier = Modifier.width(12.dp))
-            ProfileGridItem(Icons.Default.Info, "About", Modifier.weight(1f)) { onNavigate("About") }
+            ProfileGridItem(Icons.Default.Info, if (currentLanguage == "Hindi") "हमारे बारे में" else "About", Modifier.weight(1f)) { onNavigate("About") }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        ProfileListTile(Icons.Default.Security, "Privacy Policy") { onNavigate("Privacy") }
-        ProfileListTile(Icons.Default.Description, "Terms & Conditions") { onNavigate("Terms") }
-        ProfileListTile(Icons.Default.Email, "Contact") {
+        ProfileListTile(Icons.Default.Security, if (currentLanguage == "Hindi") "गोपनीयता नीति" else "Privacy Policy") { onNavigate("Privacy") }
+        ProfileListTile(Icons.Default.Description, if (currentLanguage == "Hindi") "नियम व शर्तें" else "Terms & Conditions") { onNavigate("Terms") }
+        ProfileListTile(Icons.Default.Email, if (currentLanguage == "Hindi") "हमसे संपर्क करें" else "Contact") {
             val intent = Intent(Intent.ACTION_SENDTO).apply { data = Uri.parse("mailto:contact@iqrartimes.com") }
             context.startActivity(intent)
         }
 
         Spacer(modifier = Modifier.height(12.dp))
-        ProfileListTile(Icons.Default.Logout, "Log Out", isLogout = true) { onLogout() }
+        ProfileListTile(Icons.Default.Logout, if (currentLanguage == "Hindi") "लॉग आउट" else "Log Out", isLogout = true) { onLogout() }
         Spacer(modifier = Modifier.height(30.dp))
     }
 }
@@ -265,25 +276,25 @@ fun ProfileMenuView(
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(modifier = Modifier.height(30.dp))
         Button(onClick = onLoginClick, colors = ButtonDefaults.buttonColors(containerColor = BrandRed), shape = RoundedCornerShape(8.dp), modifier = Modifier.width(220.dp).height(48.dp)) {
-            Text("SIGN IN / SIGN UP", fontWeight = FontWeight.Bold, color = Color.White)
+            Text(if (currentLanguage == "Hindi") "साइन इन / साइन अप" else "SIGN IN / SIGN UP", fontWeight = FontWeight.Bold, color = Color.White)
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Sign in to access your saved articles.", textAlign = TextAlign.Center, color = TextBlack, fontSize = 14.sp)
+        Text(if (currentLanguage == "Hindi") "अपने सहेजे गए लेखों तक पहुंचने के लिए साइन इन करें।" else "Sign in to access your saved articles.", textAlign = TextAlign.Center, color = TextBlack, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(35.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ProfileGridItem(Icons.Default.Language, "Language", Modifier.weight(1f)) { showLanguageDialog = true }
-            ProfileGridItem(Icons.Default.Notifications, "Notifications", Modifier.weight(1f)) { onNavigate("Notifications") }
+            ProfileGridItem(Icons.Default.Language, if (currentLanguage == "Hindi") "भाषा" else "Language", Modifier.weight(1f)) { showLanguageDialog = true }
+            ProfileGridItem(Icons.Default.Notifications, if (currentLanguage == "Hindi") "सूचनाएं" else "Notifications", Modifier.weight(1f)) { onNavigate("Notifications") }
         }
         Spacer(modifier = Modifier.height(12.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ProfileGridItem(Icons.Default.Settings, "Preferences", Modifier.weight(1f)) { onLoginClick() }
-            ProfileGridItem(Icons.Default.Info, "About", Modifier.weight(1f)) { onNavigate("About") }
+            ProfileGridItem(Icons.Default.Settings, if (currentLanguage == "Hindi") "प्राथमिकताएं" else "Preferences", Modifier.weight(1f)) { onLoginClick() }
+            ProfileGridItem(Icons.Default.Info, if (currentLanguage == "Hindi") "हमारे बारे में" else "About", Modifier.weight(1f)) { onNavigate("About") }
         }
         Spacer(modifier = Modifier.height(30.dp))
 
-        ProfileListTile(Icons.Default.Security, "Privacy Policy") { onNavigate("Privacy") }
-        ProfileListTile(Icons.Default.Description, "Terms & Conditions") { onNavigate("Terms") }
-        ProfileListTile(Icons.Default.Email, "Contact") { onContactClick() }
+        ProfileListTile(Icons.Default.Security, if (currentLanguage == "Hindi") "गोपनीयता नीति" else "Privacy Policy") { onNavigate("Privacy") }
+        ProfileListTile(Icons.Default.Description, if (currentLanguage == "Hindi") "नियम व शर्तें" else "Terms & Conditions") { onNavigate("Terms") }
+        ProfileListTile(Icons.Default.Email, if (currentLanguage == "Hindi") "हमसे संपर्क करें" else "Contact") { onContactClick() }
     }
 }
 

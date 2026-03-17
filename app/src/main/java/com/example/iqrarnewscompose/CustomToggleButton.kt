@@ -22,7 +22,7 @@ fun CustomToggleButton(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val transitionColor by animateColorAsState(targetValue = if (checked) Color(0xFFD32F2F) else Color.Black, label = "bgColor")
+    val transitionColor by animateColorAsState(targetValue = if (checked) Color(0xFFD32F2F) else Color.Transparent, label = "bgColor")
     val dotColor = if (checked) Color(0xFFFFCDD2).copy(alpha = 0.5f) else Color(0xFF757575)
 
     Box(
@@ -112,7 +112,7 @@ fun CustomToggleButton(
 
             // 5. Subtle Border
             drawRect(
-                color = Color.Black.copy(alpha = 0.1f),
+                color = Color.Transparent,
                 style = Stroke(width = 1.dp.toPx())
             )
         }
