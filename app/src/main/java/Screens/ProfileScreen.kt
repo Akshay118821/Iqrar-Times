@@ -527,3 +527,4 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
         }
     }
 }
+//updates in the profile Icon

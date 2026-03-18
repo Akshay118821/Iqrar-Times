@@ -2124,25 +2124,26 @@ fun HomeScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
 
-        // ✅ CHANGE: List empty unte Text kaadhu, ONLY LOADER vastundi
-        if (newsList.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = BrandRed)
-            }
-        } else {
-            // Data vachaka List chupistundi
-            LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
+        LazyColumn(modifier = Modifier.fillMaxSize().background(Color.White)) {
 
+            item {
+                DynamicCategorySection(
+                    categories = categories,
+                    selected = "Home",
+                    onClick = onNavigate
+                )
+            }
+
+            if (newsList.isEmpty()) {
                 item {
-                    DynamicCategorySection(
-                        categories = categories,
-                        selected = "Home",
-                        onClick = onNavigate
-                    )
+                    Box(
+                        modifier = Modifier.fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = BrandRed)
+                    }
                 }
+            } else {
 
                 item {
                     latestNews?.let { news ->
@@ -2261,28 +2262,30 @@ fun CategoryNewsScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
 
-        // ✅ CHANGE: Only Loader if list is empty
-        if (list.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = BrandRed)
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.White)
-            ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.White)
+        ) {
 
+            item {
+                DynamicCategorySection(
+                    categories = categories,
+                    selected = catId,
+                    onClick = onNavigate
+                )
+            }
+
+            if (list.isEmpty()) {
                 item {
-                    DynamicCategorySection(
-                        categories = categories,
-                        selected = catId,
-                        onClick = onNavigate
-                    )
+                    Box(
+                        modifier = Modifier.fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = BrandRed)
+                    }
                 }
+            } else {
 
                 items(viewModel.newsList) { item ->
                     SmallNewsCard(
@@ -2326,7 +2329,17 @@ fun DynamicCategorySection(
     val allCategories = listOf("Home" to "Home") +
             parentCategories.map { it.id to it.name }
 
+    val scrollState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val selectedIndex = allCategories.indexOfFirst { it.first.toString().equals(selected, true) }
+
+    LaunchedEffect(selected) {
+        if (selectedIndex != -1) {
+            scrollState.animateScrollToItem(if (selectedIndex > 0) selectedIndex - 1 else 0)
+        }
+    }
+
     LazyRow(
+        state = scrollState,
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
