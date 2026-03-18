@@ -153,10 +153,10 @@ fun LoggedProfileView(
     var showLanguageDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
-    // 🔥 Backend nunchi save chesina email read chestunam
+    // 🔥 Backend nunchi save chesina ID read chestunam (stored in userEmail key)
     val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-    val userEmail = prefs.getString("userEmail", "") ?: ""
-    val displayName = if (userEmail.isNotEmpty()) "ID: $userEmail" else "User"
+    val userId = prefs.getString("userEmail", "") ?: ""
+    val displayName = if (userId.isNotEmpty()) userId else "User"
 
     if (showLanguageDialog) {
         LanguagePickerDialog(

@@ -297,7 +297,7 @@ fun MainApp(viewModel: NewsViewModel) {
 
                 SideMenuDrawer(
                     isLoggedIn = isLoggedIn,
-                    userName = prefs.getString("userEmail", "")?.takeIf { it.isNotEmpty() }?.let { "ID: $it" } ?: "User",
+                    userName = prefs.getString("userEmail", "")?.takeIf { it.isNotEmpty() } ?: "User",
                     currentLanguage = currentLanguage,
                     onLanguageChange = { lang ->
                         currentLanguage = lang
@@ -375,7 +375,7 @@ fun MainApp(viewModel: NewsViewModel) {
                             ?: ""
 
                         // 🔥 USER ID EXTRACTION - robust capture from backend
-                        val userId = result.data?.username ?: ""
+                        val userId = result.data?.id ?: result.data?.user_id ?: result.data?.username ?: ""
 
                         Log.d("LOGIN_ID_SAVE", "Saving Token and UserID: $userId")
 
@@ -1262,8 +1262,8 @@ fun OtpScreen(
                                             ?: ""
 
                                         Log.d("OTP_TOKEN", "Extracted Token: ${tkn.take(50)}")
-                                        // 🔥 USER ID EXTRACTION - robust capture from backend
-                                        val userId = body?.data?.username ?: ""
+                                        //  USER ID EXTRACTION - robust capture from backend (prioritizing actual ID fields)
+                                        val userId = body?.data?.id ?: body?.data?.user_id ?: body?.data?.username ?: ""
 
                                         Log.d("OTP_ID_SAVE", "Saving UserID: $userId")
 
@@ -1387,7 +1387,7 @@ fun NewsDetailScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 🔥🔥🔥 KOTHA CODE: DATE & TIME ADD CHESAM 🔥🔥🔥
+            //  KOTHA CODE: DATE & TIME ADD CHESAM
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(bottom = 12.dp) // Kinda content ki gap
@@ -1427,7 +1427,7 @@ fun NewsDetailScreen(
                     color = TextGray
                 )
             }
-            // 🔥🔥🔥 END OF NEW CODE 🔥🔥🔥
+            //  END OF NEW CODE
 
             // 2. CONTENT (Existing Code)
             Text(
