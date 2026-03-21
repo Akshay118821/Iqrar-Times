@@ -160,8 +160,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material.icons.filled.RemoveRedEye
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Translate
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 // Data Model
 data class NewsArticle(
@@ -245,6 +250,22 @@ val TextGray = Color(0xFF666666)
 val NotoSansFont = FontFamily.SansSerif
 
 
+// --- BOOKMARK HELPERS ---
+fun saveBookmarks(context: Context, articles: List<NewsArticle>) {
+    val prefs = context.getSharedPreferences("bookmarks", Context.MODE_PRIVATE)
+    val gson = Gson()
+    val json = gson.toJson(articles)
+    prefs.edit().putString("saved_news", json).apply()
+}
+
+fun loadBookmarks(context: Context): List<NewsArticle> {
+    val prefs = context.getSharedPreferences("bookmarks", Context.MODE_PRIVATE)
+    val json = prefs.getString("saved_news", null) ?: return emptyList()
+    val gson = Gson()
+    val type = object : TypeToken<List<NewsArticle>>() {}.type
+    return gson.fromJson(json, type) ?: emptyList()
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainApp(viewModel: NewsViewModel) {
@@ -276,6 +297,23 @@ fun MainApp(viewModel: NewsViewModel) {
     var selectedScreen by remember { mutableStateOf("Home") }
 
     var currentLanguage by remember { mutableStateOf("Hindi") }
+
+    val savedArticles = remember { mutableStateListOf<NewsArticle>() }
+    LaunchedEffect(Unit) {
+        savedArticles.addAll(loadBookmarks(context))
+    }
+
+    val toggleBookmark: (NewsArticle) -> Unit = { article ->
+        val index = savedArticles.indexOfFirst { it.id == article.id }
+        if (index != -1) {
+            savedArticles.removeAt(index)
+            Toast.makeText(context, "Removed from Bookmarks", Toast.LENGTH_SHORT).show()
+        } else {
+            savedArticles.add(article)
+            Toast.makeText(context, "Article Bookmarked", Toast.LENGTH_SHORT).show()
+        }
+        saveBookmarks(context, savedArticles)
+    }
 
     BackHandler(enabled = authStep > 0 || drawerState.isOpen) {
         if (drawerState.isOpen) {
@@ -339,7 +377,6 @@ fun MainApp(viewModel: NewsViewModel) {
 
             MainContent(
                 viewModel = viewModel,
-                isLoggedIn = isLoggedIn,
                 selectedScreen = selectedScreen,
                 currentLanguage = currentLanguage,
                 onLanguageChange = { lang ->
@@ -355,9 +392,8 @@ fun MainApp(viewModel: NewsViewModel) {
                 openLogin = {
                     authStep = 1
                 },
-                openLoginDialog = {
-                    showLoginDialog = true
-                }
+                savedArticles = savedArticles,
+                onToggleBookmark = toggleBookmark
             )
 
             if (showLoginDialog) {
@@ -438,17 +474,16 @@ fun MainApp(viewModel: NewsViewModel) {
 @Composable
 fun MainContent(
     viewModel: NewsViewModel,
-    isLoggedIn: Boolean,
     selectedScreen: String,
     currentLanguage: String,
     onLanguageChange: (String) -> Unit,
     onNavigate: (String) -> Unit,
     onOpenDrawer: () -> Unit,
     openLogin: () -> Unit,
-    openLoginDialog: () -> Unit
+    savedArticles: List<NewsArticle>,
+    onToggleBookmark: (NewsArticle) -> Unit
 ) {
 
-    var showLanguageMenu by remember { mutableStateOf(false) }
     var isMainHeaderVisible by remember { mutableStateOf(true) }
     var selectedArticle by remember { mutableStateOf<NewsArticle?>(null) }
     var showCommentsFor by remember { mutableStateOf<NewsArticle?>(null) }
@@ -503,35 +538,11 @@ fun MainContent(
                         },
                         actions = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box {
-                                    IconButton(onClick = {
-                                        showLanguageMenu = true
-                                        if(isFlipMode) tempBarsVisible = true
-                                    }) {
-                                        Icon(Icons.Default.Translate, null, tint = Color.White)
-                                    }
-                                    DropdownMenu(
-                                        expanded = showLanguageMenu,
-                                        onDismissRequest = { showLanguageMenu = false },
-                                        modifier = Modifier.background(Color.White)
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("English", color = TextBlack) },
-                                            onClick = {
-                                                onLanguageChange("English")
-                                                showLanguageMenu = false
-                                                isFlipMode = false // 🔥 Close Flip Screen
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("हिंदी", color = TextBlack) },
-                                            onClick = {
-                                                onLanguageChange("Hindi")
-                                                showLanguageMenu = false
-                                                isFlipMode = false // 🔥 Close Flip Screen
-                                            }
-                                        )
-                                    }
+                                IconButton(onClick = {
+                                    onNavigate("Saved News")
+                                    if(isFlipMode) tempBarsVisible = true
+                                }) {
+                                    Icon(Icons.Default.BookmarkBorder, null, tint = Color.White)
                                 }
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -613,9 +624,20 @@ fun MainContent(
                 //  News Detail screen ki kotha parameter pass chesthunnam
                 NewsDetailScreen(
                     article = selectedArticle!!,
-                    isLoggedIn = isLoggedIn,
-                    onOpenLoginDialog = openLoginDialog,
-                    onCommentClick = { showCommentsFor = it } // Idhi click chesthe state marusthundi
+                    onBack = { selectedArticle = null },
+                    isBookmarked = savedArticles.any { it.id == selectedArticle?.id },
+                    onToggleBookmark = onToggleBookmark,
+                    onNavigate = { screen ->
+                        if (screen == "Comments") {
+                             onNavigate("Comments")
+                        } else {
+                            onNavigate(screen)
+                        }
+                    },
+                    onCommentClick = { 
+                        showCommentsFor = it 
+                        onNavigate("Comments")
+                    }
                 )
             }
             else if (isFlipMode) {
@@ -643,7 +665,8 @@ fun MainContent(
             }
             else {
                 when (selectedScreen) {
-                    "Home" -> HomeScreen(lang = currentLanguage, onNavigate = { onNavigate(it) }, onNewsClick = { selectedArticle = it }, categories = viewModel.categories, viewModel = viewModel)
+                    "Home" -> HomeScreen(lang = currentLanguage, onNavigate = { onNavigate(it) }, onNewsClick = { selectedArticle = it }, categories = viewModel.categories, viewModel = viewModel, savedArticles = savedArticles, onToggleBookmark = onToggleBookmark)
+                    "Saved News" -> SavedNewsScreen(savedArticles = savedArticles, onBack = { onNavigate("Home") }, onNewsClick = { selectedArticle = it }, onRemoveBookmark = onToggleBookmark)
                     "Profile" -> com.example.iqrarnewscompose.profile.ProfileScreen(
                         categories = viewModel.categories,
                         onToggleHeader = { isMainHeaderVisible = it },
@@ -651,8 +674,8 @@ fun MainContent(
                         currentLanguage = currentLanguage,
                         onLanguageChange = { lang ->
                             onLanguageChange(lang)
-                            onNavigate("Home")         //  Language change taruvatha Home ki navigate avvali
-                            isMainHeaderVisible = true //  Header restore cheyali
+                            onNavigate("Home")
+                            isMainHeaderVisible = true
                         }
                     )
                     "Live TV" -> LiveTVScreen(currentLanguage, viewModel)
@@ -685,7 +708,7 @@ fun MainContent(
                             isMainHeaderVisible = true 
                         }
                     )
-                    else -> CategoryNewsScreen(catId = selectedScreen, lang = currentLanguage, onNavigate = { onNavigate(it) }, onNewsClick = { selectedArticle = it }, categories = viewModel.categories, viewModel = viewModel)
+                    else -> CategoryNewsScreen(catId = selectedScreen, lang = currentLanguage, onNavigate = { onNavigate(it) }, onNewsClick = { selectedArticle = it }, categories = viewModel.categories, viewModel = viewModel, savedArticles = savedArticles, onToggleBookmark = onToggleBookmark)
                 }
             }
         }
@@ -1337,8 +1360,10 @@ fun OtpScreen(
 @Composable
 fun NewsDetailScreen(
     article: NewsArticle,
-    isLoggedIn: Boolean,
-    onOpenLoginDialog: () -> Unit,
+    onBack: () -> Unit,
+    isBookmarked: Boolean,
+    onToggleBookmark: (NewsArticle) -> Unit,
+    onNavigate: (String) -> Unit,
     onCommentClick: (NewsArticle) -> Unit
 ) {
     val context = LocalContext.current
@@ -1476,21 +1501,17 @@ fun NewsDetailScreen(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable {
-                        Toast.makeText(
-                            context,
-                            "Article Bookmarked",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        onToggleBookmark(article)
                     }
                 ) {
                     Icon(
-                        Icons.Default.BookmarkBorder,
+                        imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                         contentDescription = null,
                         tint = BrandRed
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        "Bookmark",
+                        if (isBookmarked) "Bookmarked" else "Bookmark",
                         color = BrandRed,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -1500,11 +1521,8 @@ fun NewsDetailScreen(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable {
-                        if (!isLoggedIn) {
-                            onOpenLoginDialog()
-                        } else {
-                            onCommentClick(article)
-                        }
+                        // Removed isLoggedIn check here, as it's handled by the navigation logic
+                        onCommentClick(article)
                     }
                 ){
                     Icon(
@@ -2099,7 +2117,9 @@ fun HomeScreen(
     onNavigate: (String) -> Unit,
     onNewsClick: (NewsArticle) -> Unit,
     categories: List<CategoryItem>,
-    viewModel: NewsViewModel
+    viewModel: NewsViewModel,
+    savedArticles: List<NewsArticle>,
+    onToggleBookmark: (NewsArticle) -> Unit
 ) {
     val context = LocalContext.current
     var isPreferredMode by remember { mutableStateOf(false) }
@@ -2147,24 +2167,24 @@ fun HomeScreen(
 
                 item {
                     latestNews?.let { news ->
+                        val article = NewsArticle(
+                            news.id ?: "",
+                            news.name ?: "",
+                            news.icon,
+                            news.date ?: "",
+                            news.author ?: "",
+                            news.content ?: "",
+                            news.formattedViewCount
+                        )
                         FeaturedNewsCard(
                             img = news.icon,
                             tit = news.name ?: "",
                             meta = news.date ?: "",
                             viewCount = news.formattedViewCount,
-                            onClick = {
-                                onNewsClick(
-                                    NewsArticle(
-                                        news.id ?: "",
-                                        news.name ?: "",
-                                        news.icon,
-                                        news.date ?: "",
-                                        news.author ?: "",
-                                        news.content ?: "",
-                                        news.formattedViewCount
-                                    )
-                                )
-                            }
+                            isBookmarked = savedArticles.any { it.id == news.id },
+                            showBookmark = false, // Hide bookmark on home screen
+                            onBookmarkClick = { onToggleBookmark(article) },
+                            onClick = { onNewsClick(article) }
                         )
                     }
                 }
@@ -2174,25 +2194,25 @@ fun HomeScreen(
                 }
 
                 items(viewModel.newsList.take(5)) { news ->
+                    val article = NewsArticle(
+                        news.id ?: "",
+                        news.name ?: "",
+                        news.icon,
+                        news.date ?: "",
+                        news.author ?: "",
+                        news.content ?: "",
+                        news.formattedViewCount
+                    )
                     SmallNewsCard(
                         img = news.icon,
                         tit = news.name ?: "",
                         date = news.date ?: "",
                         auth = news.author ?: "Admin",
                         viewCount = news.formattedViewCount,
-                        onClick = {
-                            onNewsClick(
-                                NewsArticle(
-                                    news.id ?: "",
-                                    news.name ?: "",
-                                    news.icon,
-                                    news.date ?: "",
-                                    news.author ?: "",
-                                    news.content ?: "",
-                                    news.formattedViewCount
-                                )
-                            )
-                        }
+                        isBookmarked = savedArticles.any { it.id == news.id },
+                        showBookmark = false, // Hide bookmark on home screen
+                        onBookmarkClick = { onToggleBookmark(article) },
+                        onClick = { onNewsClick(article) }
                     )
                 }
 
@@ -2201,25 +2221,25 @@ fun HomeScreen(
                 }
 
                 items(viewModel.newsList.take(5)) { news ->
+                    val article = NewsArticle(
+                        news.id ?: "",
+                        news.name ?: "",
+                        news.icon,
+                        news.date ?: "",
+                        news.author ?: "",
+                        news.content ?: "",
+                        news.formattedViewCount
+                    )
                     SmallNewsCard(
                         img = news.icon,
                         tit = news.name ?: "",
                         date = news.date ?: "",
                         auth = news.author ?: "Admin",
                         viewCount = news.formattedViewCount,
-                        onClick = {
-                            onNewsClick(
-                                NewsArticle(
-                                    news.id ?: "",
-                                    news.name ?: "",
-                                    news.icon,
-                                    news.date ?: "",
-                                    news.author ?: "",
-                                    news.content ?: "",
-                                    news.formattedViewCount
-                                )
-                            )
-                        }
+                        isBookmarked = savedArticles.any { it.id == news.id },
+                        showBookmark = false, // Hide bookmark on home screen
+                        onBookmarkClick = { onToggleBookmark(article) },
+                        onClick = { onNewsClick(article) }
                     )
                 }
 
@@ -2250,7 +2270,9 @@ fun CategoryNewsScreen(
     onNavigate: (String) -> Unit,
     onNewsClick: (NewsArticle) -> Unit,
     categories: List<CategoryItem>,
-    viewModel: NewsViewModel
+    viewModel: NewsViewModel,
+    savedArticles: List<NewsArticle>,
+    onToggleBookmark: (NewsArticle) -> Unit
 ) {
     LaunchedEffect(catId, lang) {
         val langParam = if (lang == "Hindi") "HINDI" else "ENGLISH"
@@ -2288,25 +2310,25 @@ fun CategoryNewsScreen(
             } else {
 
                 items(viewModel.newsList) { item ->
+                    val articleRequested = NewsArticle(
+                        item.id ?: "",
+                        item.name ?: "",
+                        item.image?.firstOrNull() ?: "",
+                        item.date ?: "",
+                        item.author ?: "",
+                        item.content ?: "",
+                        item.formattedViewCount
+                    )
                     SmallNewsCard(
                         img = item.icon,
                         tit = item.name ?: "",
                         date = item.date ?: "",
                         auth = item.author ?: "Admin",
                         viewCount = item.formattedViewCount,
-                        onClick = {
-                            onNewsClick(
-                                NewsArticle(
-                                    item.id ?: "",
-                                    item.name ?: "",
-                                    item.image?.firstOrNull() ?: "",
-                                    item.date ?: "",
-                                    item.author ?: "",
-                                    item.content ?: "",
-                                    item.formattedViewCount
-                                )
-                            )
-                        }
+                        isBookmarked = savedArticles.any { it.id == item.id },
+                        showBookmark = false, // Hide bookmark on category screen
+                        onBookmarkClick = { onToggleBookmark(articleRequested) },
+                        onClick = { onNewsClick(articleRequested) }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -2394,7 +2416,16 @@ fun DynamicCategorySection(
 }
 
 @Composable
-fun FeaturedNewsCard(img: String, tit: String, meta: String, viewCount: String, onClick: () -> Unit = {}) {
+fun FeaturedNewsCard(
+    img: String, 
+    tit: String, 
+    meta: String, 
+    viewCount: String, 
+    isBookmarked: Boolean = false,
+    showBookmark: Boolean = false,
+    onBookmarkClick: () -> Unit = {},
+    onClick: () -> Unit = {}
+) {
     val context = LocalContext.current
     Column(modifier = Modifier.padding(16.dp).clickable { onClick() }) {
         Box(modifier = Modifier.fillMaxWidth().height(200.dp)) {
@@ -2439,8 +2470,25 @@ fun FeaturedNewsCard(img: String, tit: String, meta: String, viewCount: String, 
             }
         }
         Spacer(modifier = Modifier.height(12.dp))
-        Text(tit, color = TextBlack, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Text(formatDate(meta), color = TextGray, fontSize = 12.sp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(tit, color = TextBlack, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(formatDate(meta), color = TextGray, fontSize = 12.sp)
+            }
+            if (showBookmark) {
+                IconButton(onClick = onBookmarkClick) {
+                    Icon(
+                        imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = "Bookmark",
+                        tint = BrandRed
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -2451,6 +2499,9 @@ fun SmallNewsCard(
     date: String,
     auth: String,
     viewCount: String = "0",
+    isBookmarked: Boolean = false,
+    showBookmark: Boolean = false,
+    onBookmarkClick: () -> Unit = {},
     onClick: () -> Unit = {}
 ) {
     Card(
@@ -2539,6 +2590,18 @@ fun SmallNewsCard(
                     )
                     Spacer(modifier = Modifier.width(2.dp))
                     Text(text = viewCount, fontSize = 10.sp, color = TextGray)
+                }
+            }
+
+            // Bookmark Icon
+            if (showBookmark) {
+                IconButton(onClick = onBookmarkClick) {
+                    Icon(
+                        imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = "Bookmark",
+                        tint = BrandRed,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }
